@@ -1,0 +1,848 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Step-by-step used car inspection checklist with reference specs, decision logic, and a final verdict report.">
+<meta name="theme-color" content="#ffffff">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>Used Car Inspection</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one narrow column like a clipboard work order; sticky header with step tabs; items are ruled rows, not cards. */
+:root{
+  --bg:#eef1f0; --surface:#ffffff; --sunk:#e2e8e5; --ink:#121816; --muted:#56635f; --line:#d2d9d6;
+  --accent:#23467c; --accent-ink:#ffffff; --spec:#e4ebf5; --spec-ink:#1b3660;
+  --ok:#1b7745; --ok-bg:#dff1e6; --minor:#8f6200; --minor-bg:#faefcf; --major:#bd4710; --major-bg:#fde4d4; --crit:#b0241c; --crit-bg:#fadedb;
+  --f-display:"Barlow Condensed","Arial Narrow","Roboto Condensed",sans-serif;
+  --f-body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0d1211; --surface:#151c1a; --sunk:#202a27; --ink:#e4eae7; --muted:#99a6a1; --line:#2a3532;
+  --accent:#8fb2ee; --accent-ink:#0d1211; --spec:#172134; --spec-ink:#b9cff3;
+  --ok:#5ccb8f; --ok-bg:#142e1f; --minor:#e6bb52; --minor-bg:#30270e; --major:#f39558; --major-bg:#3a2011; --crit:#f47c70; --crit-bg:#3d1613;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0d1211; --surface:#151c1a; --sunk:#202a27; --ink:#e4eae7; --muted:#99a6a1; --line:#2a3532;
+  --accent:#8fb2ee; --accent-ink:#0d1211; --spec:#172134; --spec-ink:#b9cff3;
+  --ok:#5ccb8f; --ok-bg:#142e1f; --minor:#e6bb52; --minor-bg:#30270e; --major:#f39558; --major-bg:#3a2011; --crit:#f47c70; --crit-bg:#3d1613;
+  color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+.wrap{max-width:760px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+/* Header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.top .wrap{padding-block:10px 0}
+.top-row{display:flex;align-items:center;gap:12px}
+.car{flex:1;min-width:0}
+.eyebrow{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.09em;font-size:12px;font-weight:600;color:var(--muted)}
+.car-name{font-family:var(--f-display);font-weight:700;font-size:22px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.count{font-family:var(--f-mono);font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:42px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--surface);font-weight:600;font-size:15px;text-decoration:none;color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.bar{height:4px;background:var(--sunk);border-radius:2px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .3s}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-block:10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:var(--bg);border-radius:999px;padding:7px 11px;font:600 14px/1 var(--f-display);letter-spacing:.02em;white-space:nowrap}
+.chip[aria-current="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .n{font-family:var(--f-mono);font-weight:400;font-size:11px;opacity:.75;font-variant-numeric:tabular-nums}
+.d{width:8px;height:8px;border-radius:50%;background:var(--line);flex:none}
+.d[data-g="ok"]{background:var(--ok)} .d[data-g="minor"]{background:var(--minor)} .d[data-g="major"]{background:var(--major)} .d[data-g="critical"]{background:var(--crit)}
+
+/* Section */
+.sec-head{padding-block:26px 6px;display:flex;flex-direction:column;gap:6px}
+.sec-num{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;color:var(--accent)}
+h2{font-family:var(--f-display);font-weight:700;font-size:34px;line-height:1;text-transform:uppercase;letter-spacing:.01em;margin:0;text-wrap:balance}
+.blurb{color:var(--muted);max-width:62ch;margin:0}
+.banner{border-radius:8px;padding:12px 14px;background:var(--minor-bg);color:var(--ink);font-size:15px}
+.banner strong{color:var(--minor)}
+.glabel{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.09em;font-size:13px;font-weight:700;color:var(--muted);padding-block:22px 8px;border-bottom:2px solid var(--ink)}
+.items{display:flex;flex-direction:column}
+.item{padding-block:18px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.item-head{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.item h3{font-size:18px;font-weight:600;margin:0;line-height:1.25;text-wrap:balance}
+.gchip{flex:none;font:700 12px/1 var(--f-display);text-transform:uppercase;letter-spacing:.07em;padding:5px 8px;border-radius:4px;background:transparent;color:var(--muted)}
+.gchip:empty{display:none}
+.gchip[data-g="ok"]{background:var(--ok-bg);color:var(--ok)}
+.gchip[data-g="minor"]{background:var(--minor-bg);color:var(--minor)}
+.gchip[data-g="major"]{background:var(--major-bg);color:var(--major)}
+.gchip[data-g="critical"]{background:var(--crit-bg);color:var(--crit)}
+.gchip[data-g="na"],.gchip[data-g="info"]{background:var(--sunk);color:var(--muted)}
+.how{margin:0;color:var(--muted);font-size:15px;max-width:65ch}
+.spec{display:grid;grid-template-columns:auto 1fr;gap:10px;background:var(--spec);color:var(--spec-ink);border-radius:6px;padding:10px 12px;font-size:14.5px;line-height:1.45}
+.spec b{font:500 11px/1.75 var(--f-mono);letter-spacing:.1em}
+.spec span{min-width:0}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{font-weight:600;font-size:15px;padding:6px 0}
+.seg{display:grid;grid-template-columns:1fr 1fr auto;gap:6px}
+.sbtn{min-height:48px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-weight:600;font-size:16px;padding:0 14px}
+.sbtn.na{font-weight:500;font-size:14px;color:var(--muted)}
+.sbtn[aria-pressed="true"]{color:var(--surface)}
+.sbtn[aria-pressed="true"][data-v="ok"]{background:var(--ok);border-color:var(--ok)}
+.sbtn[aria-pressed="true"][data-sev="minor"]{background:var(--minor);border-color:var(--minor)}
+.sbtn[aria-pressed="true"][data-sev="major"]{background:var(--major);border-color:var(--major)}
+.sbtn[aria-pressed="true"][data-sev="critical"]{background:var(--crit);border-color:var(--crit)}
+.sbtn.na[aria-pressed="true"]{background:var(--sunk);border-color:var(--muted);color:var(--ink)}
+.opts{display:flex;flex-direction:column;gap:6px}
+.opt{display:flex;align-items:center;gap:11px;text-align:left;min-height:48px;padding:10px 12px;border:1px solid var(--line);background:var(--surface);border-radius:8px;font-size:16px;line-height:1.3}
+.opt .d{width:10px;height:10px}
+.opt[aria-pressed="true"]{border-width:2px;padding:9px 11px;font-weight:600}
+.opt[aria-pressed="true"][data-g="ok"]{background:var(--ok-bg);border-color:var(--ok)}
+.opt[aria-pressed="true"][data-g="minor"]{background:var(--minor-bg);border-color:var(--minor)}
+.opt[aria-pressed="true"][data-g="major"]{background:var(--major-bg);border-color:var(--major)}
+.opt[aria-pressed="true"][data-g="critical"]{background:var(--crit-bg);border-color:var(--crit)}
+.opt[aria-pressed="true"][data-g="na"]{background:var(--sunk);border-color:var(--muted)}
+.linkbtn{align-self:flex-start;background:none;border:0;padding:4px 0;color:var(--accent);font-weight:600;font-size:15px}
+.row-actions{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.numrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.numrow input{width:130px;min-height:48px;font:500 20px var(--f-mono);padding:0 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums}
+.unit{font-family:var(--f-mono);color:var(--muted);font-size:15px}
+.numrow .sbtn{margin-left:auto}
+textarea,.field input{width:100%;font:inherit;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);resize:vertical}
+textarea{min-height:52px}
+.finding{border-radius:6px;padding:10px 12px;font-size:15px;background:var(--sunk)}
+.finding strong{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.06em;font-size:13px;margin-right:6px}
+.finding[data-g="ok"]{background:var(--ok-bg)} .finding[data-g="ok"] strong{color:var(--ok)}
+.finding[data-g="minor"]{background:var(--minor-bg)} .finding[data-g="minor"] strong{color:var(--minor)}
+.finding[data-g="major"]{background:var(--major-bg)} .finding[data-g="major"] strong{color:var(--major)}
+.finding[data-g="critical"]{background:var(--crit-bg)} .finding[data-g="critical"] strong{color:var(--crit)}
+.finding.err{background:var(--crit-bg);color:var(--crit)}
+.cost{font-family:var(--f-mono);font-size:13.5px;white-space:nowrap}
+.tick{display:flex;gap:12px;align-items:flex-start;text-align:left;width:100%;background:none;border:0;border-bottom:1px solid var(--line);padding:13px 0}
+.tick .box{flex:none;width:24px;height:24px;border:2px solid var(--muted);border-radius:5px;display:grid;place-items:center;margin-top:1px}
+.tick[aria-pressed="true"] .box{background:var(--accent);border-color:var(--accent)}
+.tick[aria-pressed="true"] .box::after{content:"";width:6px;height:11px;border:solid var(--accent-ink);border-width:0 3px 3px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.tick b{display:block;font-weight:600}
+.tick small{display:block;color:var(--muted);font-size:14.5px;margin-top:2px}
+.tick-links{padding-left:36px}
+
+/* Vehicle form */
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;padding-top:16px}
+.field{display:flex;flex-direction:column;gap:5px;min-width:0}
+.field span{font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-family:var(--f-display)}
+.field.span{grid-column:1/-1}
+.field input{font-family:var(--f-body);min-height:46px}
+.vin input{font-family:var(--f-mono);letter-spacing:.06em;text-transform:uppercase}
+.hint{font-size:14px;color:var(--muted);min-height:0}
+.hint.bad{color:var(--crit)} .hint.good{color:var(--ok)}
+.segs{display:flex;flex-wrap:wrap;gap:6px;padding-top:12px}
+.segs .sbtn{flex:1 1 90px}
+.segs .sbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.vchecks{display:flex;flex-direction:column;gap:8px;padding-top:14px}
+
+.secnav{display:flex;gap:10px;justify-content:space-between;flex-wrap:wrap;padding-block:28px 56px}
+.secnav .btn{flex:1 1 140px;min-height:52px}
+.left{font-size:14px;color:var(--muted);width:100%;text-align:center}
+
+/* Overview */
+.ov{padding-block:26px 56px;display:flex;flex-direction:column;gap:14px}
+.ov-meta{color:var(--muted);margin:0;font-family:var(--f-mono);font-size:13.5px;overflow-wrap:anywhere}
+.vband{--lv:var(--muted);display:flex;gap:18px;align-items:center;flex-wrap:wrap;border:2px solid var(--lv);border-radius:12px;padding:16px;background:var(--surface)}
+.vband[data-level="ok"]{--lv:var(--ok)} .vband[data-level="major"]{--lv:var(--major)} .vband[data-level="critical"]{--lv:var(--crit)} .vband[data-level="minor"]{--lv:var(--minor)}
+.gauge{width:150px;max-width:100%;flex:none}
+.gauge .g-num{font:700 30px var(--f-display);fill:var(--ink)}
+.gauge .g-lbl{font:400 9px var(--f-mono);fill:var(--muted)}
+.vtext{flex:1 1 240px;min-width:0}
+.vtitle{font-family:var(--f-display);font-weight:700;font-size:30px;line-height:1.05;text-transform:uppercase;color:var(--lv);text-wrap:balance}
+.vtext p{margin:6px 0 0}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.stat{background:var(--surface);padding:12px}
+.stat b{display:block;font:700 26px/1 var(--f-display);font-variant-numeric:tabular-nums}
+.stat span{font-size:13px;color:var(--muted)}
+.stat[data-g="ok"] b{color:var(--ok)} .stat[data-g="minor"] b{color:var(--minor)} .stat[data-g="major"] b{color:var(--major)} .stat[data-g="critical"] b{color:var(--crit)}
+.ov h3{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.06em;font-size:20px;margin:18px 0 0;padding-bottom:6px;border-bottom:2px solid var(--ink)}
+.money{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.mcell{display:flex;flex-direction:column;gap:2px}
+.mcell span{font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-family:var(--f-display);font-weight:600}
+.mcell b{font:500 19px var(--f-mono);font-variant-numeric:tabular-nums}
+.mcell.hl b{color:var(--accent)}
+.mnote{font-size:14.5px;color:var(--muted);margin:0}
+.ins{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ins li{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-radius:8px;background:var(--sunk)}
+.ins li[data-g="ok"]{background:var(--ok-bg)} .ins li[data-g="minor"]{background:var(--minor-bg)} .ins li[data-g="major"]{background:var(--major-bg)} .ins li[data-g="critical"]{background:var(--crit-bg)}
+.ins b{font-weight:700}
+.ins span{font-size:15px}
+.fgroup h4{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;font-size:14px;margin:14px 0 4px;display:flex;align-items:center;gap:8px}
+.flist{list-style:none;margin:0;padding:0}
+.flist li{padding:12px 0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:1fr auto;gap:2px 12px}
+.flist .fl{font-weight:600}
+.flist .fs{font-size:13px;color:var(--muted);font-family:var(--f-mono)}
+.flist .ff{grid-column:1/-1;font-size:15px}
+.flist .fn{grid-column:1/-1;font-size:14.5px;color:var(--muted);font-style:italic;overflow-wrap:anywhere}
+.flist .cost{text-align:right}
+.empty{color:var(--muted);margin:6px 0 0}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:10px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:middle}
+th{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.06em;font-size:12.5px;color:var(--muted)}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+td .linkbtn{padding:0}
+dl.answers{margin:0;display:flex;flex-direction:column}
+dl.answers div{padding:10px 0;border-bottom:1px solid var(--line)}
+dl.answers dt{font-size:13.5px;color:var(--muted)}
+dl.answers dd{margin:2px 0 0;overflow-wrap:anywhere}
+details{border:1px solid var(--line);border-radius:8px;padding:0 14px;background:var(--surface)}
+summary{padding:14px 0;font-weight:600;cursor:pointer}
+details ul{margin:0 0 12px;padding-left:18px}
+details li{padding:3px 0}
+.actions{display:flex;flex-wrap:wrap;gap:10px;padding-top:18px}
+.actions .btn{flex:1 1 170px;min-height:50px}
+#copybox{font-family:var(--f-mono);font-size:13px;min-height:200px}
+.toast{font-size:14px;color:var(--ok);width:100%}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+@media (max-width:420px){h2{font-size:30px}.seg{grid-template-columns:1fr 1fr}.seg .na{grid-column:1/-1;min-height:40px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="top-row">
+      <div class="car"><div class="eyebrow">Used car inspection</div><div class="car-name" id="carName">Untitled vehicle</div></div>
+      <span class="count" id="count">0/0</span>
+      <button class="btn primary" data-act="overview" id="ovBtn">Report</button>
+    </div>
+    <div class="bar"><i id="barFill"></i></div>
+    <nav class="chips" id="chips" aria-label="Inspection steps"></nav>
+  </div>
+</header>
+<main class="wrap" id="main"></main>
+
+<script>
+(function(){
+"use strict";
+const Y = new Date().getFullYear();
+const KEY = "usedcar-inspection-v1";
+const GN = {ok:"Good",minor:"Minor",major:"Major",critical:"Deal-breaker",na:"Skipped",info:"Noted"};
+const RANK = {ok:1,minor:2,major:3,critical:4};
+
+function fresh(){return {v:{year:"",make:"",model:"",trim:"",mileage:"",vin:"",price:"",tradein:"",private:"",seller:"",trans:"",drive:"",feat:null},r:{},sec:0,view:"list",started:Date.now()};}
+function load(){try{const j=localStorage.getItem(KEY);if(!j)return null;const o=JSON.parse(j);return o&&o.v&&o.r?o:null}catch(e){return null}}
+let S = load() || fresh();
+let saveT; function save(){clearTimeout(saveT);saveT=setTimeout(()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}},200)}
+
+const esc = s => String(s==null?"":s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const num = x => {const n=parseFloat(String(x==null?"":x).replace(/[^0-9.\-]/g,""));return isNaN(n)?null:n};
+const money = n => (n<0?"-$":"$")+Math.abs(Math.round(n)).toLocaleString("en-US");
+const round50 = n => Math.round(n/50)*50;
+const res = x => typeof x==="function"?x():x;
+const miles = () => num(S.v.mileage);
+const isAuto = () => S.v.trans!=="manual";
+const isManual = () => S.v.trans!=="auto";
+const isAWD = () => S.v.drive==="awd"||S.v.drive==="4wd";
+const drv = list => !S.v.drive || list.includes(S.v.drive);
+const has = f => S.v.feat==null || S.v.feat.includes(f);
+const ok = (l="Good") => ({l,g:"ok"});
+const opt = (l,g,c,f,x) => Object.assign({l,g,c,f},x||{});
+const costTxt = c => c&&c[1]>0 ? ` <span class="cost">Est. ${money(c[0])}–${money(c[1])}</span>` : "";
+
+const FEATURES=[["sunroof","Sunroof"],["nav","Touchscreen / nav"],["camera","Backup camera"],["psensors","Parking sensors"],["heatseats","Heated seats"],["cruise","Cruise control"],["fog","Fog lights"],["autodim","Auto-dim mirror"]];
+
+/* ------------------------------------------------------------------ */
+/* Checklist content                                                   */
+/* ------------------------------------------------------------------ */
+const SECTIONS=[
+{id:"vehicle",title:"Vehicle",short:"Vehicle",blurb:"Fill in what you know from the listing. Transmission, drivetrain, and features decide which checks appear later.",custom:true,items:[]},
+
+{id:"prep",title:"Before you go",short:"Prep",blurb:"Do the research at home and pack the kit. Ask the seller not to start the car before you arrive.",items:[
+ {id:"b_obd",t:"tick",grp:"Bring with you",label:"OBD-II scanner",how:"Any $20–40 plug-in or Bluetooth reader that shows codes and readiness monitors."},
+ {id:"b_mag",t:"tick",grp:"Bring with you",label:"Magnet",how:"Wrap it in a paper towel or cloth so it can't scratch paint."},
+ {id:"b_light",t:"tick",grp:"Bring with you",label:"Flashlight"},
+ {id:"b_towel",t:"tick",grp:"Bring with you",label:"Paper towels",how:"For wiping dipsticks and checking fluid color."},
+ {id:"b_pen",t:"tick",grp:"Bring with you",label:"Pen, or this page on your phone"},
+ {id:"b_tread",t:"tick",grp:"Bring with you",label:"Tread depth gauge or a penny"},
+ {id:"b_meter",t:"tick",grp:"Bring with you",label:"Multimeter (optional)",how:"For battery and charging voltage."},
+ {id:"b_therm",t:"tick",grp:"Bring with you",label:"Thermometer (optional)",how:"A cheap probe thermometer for A/C vent temperature."},
+ {id:"b_helper",t:"tick",grp:"Bring with you",label:"A helper (optional)",how:"Makes the lights check and engine-mount test much easier."},
+ {id:"hist",t:"choice",grp:"Research",label:"Vehicle history report",how:"Run the VIN through Carfax or AutoCheck.",spec:"Look for accidents, title brands (salvage, rebuilt, flood, lemon), odometer problems, number of owners, and long gaps in records.",links:[["Carfax","https://www.carfax.com"],["AutoCheck","https://www.autocheck.com"]],opts:[
+   ok("Clean history"),
+   opt("Minor accident reported","minor",null,"History shows a minor accident: inspect that area closely",{tag:"crash"}),
+   opt("Major or structural accident, airbags deployed","major",null,"History shows a major accident: get a frame inspection",{tag:"crash"}),
+   opt("Salvage, rebuilt, flood, or lemon brand","critical",null,"Branded title on the history report",{tag:"flood"}),
+   opt("Odometer discrepancy","critical",null,"Odometer discrepancy on the history report",{tag:"odo"})]},
+ {id:"nicb",t:"choice",grp:"Research",label:"Theft & total-loss check (NICB)",spec:"Free lookup of insurance theft and total-loss records.",links:[["NICB VINCheck","https://www.nicb.org/vincheck"]],opts:[ok("No records"),opt("Theft or total-loss record","critical",null,"NICB shows a theft or total-loss record")]},
+ {id:"recall",t:"choice",grp:"Research",label:"Open safety recalls (NHTSA)",spec:"Recall repairs are free at any franchised dealer for that brand.",links:[["NHTSA recall lookup","https://www.nhtsa.gov/recalls"]],opts:[ok("No open recalls"),opt("Open recall(s)","minor",null,"Open recall: free dealer repair; ask whether it's been done")]},
+ {id:"values",t:"tick",grp:"Research",label:"Look up trade-in and private-party values",how:"Enter both on the Vehicle step. The report compares them to the asking price.",links:[["Kelley Blue Book","https://www.kbb.com"],["Edmunds","https://www.edmunds.com"]]}
+]},
+
+{id:"seller",title:"Seller & paperwork",short:"Seller",blurb:"Ask these before you inspect, then see whether the car backs up the answers. Write down what they say.",items:[
+ {id:"owned",t:"num",grp:"Ask the owner",label:"How long have you owned the car?",unit:"months",spec:"Under 6 months can mean a flipper, or a problem the owner just discovered.",grade:v=>v<0?{err:"Enter months owned"}:v<6?{g:"minor",f:`Owned only ${v} months: ask why they're selling so soon`,tag:"seller"}:{g:"ok",f:`Owned ${v>=12?(Math.round(v/12*10)/10)+" years":v+" months"}`}},
+ {id:"q_why",t:"text",grp:"Ask the owner",label:"Why are you selling it?"},
+ {id:"q_problems",t:"text",grp:"Ask the owner",label:"Does everything work? Any problems?"},
+ {id:"q_service",t:"text",grp:"Ask the owner",label:"What maintenance or repairs have you done?"},
+ {id:"q_use",t:"text",grp:"Ask the owner",label:"What did you use it for?",how:"Commuting, highway, towing, rideshare, short trips…"},
+ {id:"q_miles",t:"text",grp:"Ask the owner",label:"How many miles did you put on it?"},
+ {id:"q_next",t:"text",grp:"Ask the owner",label:"What are you getting next, and why?"},
+ {id:"records",t:"choice",grp:"Paperwork",label:"Service records",spec:"Receipts or a dealer printout showing regular oil changes (every 5,000–10,000 mi) and major services.",opts:[ok("Full records"),opt("Some records","minor",[100,400],"Partial service records: plan a fluid service"),opt("No records","minor",[200,600],"No service records: assume fluids and filters are due",{tag:"seller"})]},
+ {id:"timing",t:"choice",grp:"Paperwork",label:"Timing belt or chain?",spec:"Belts usually need replacing every 60,000–105,000 miles (see the owner's manual). A snapped belt can wreck the engine. Chains normally last the life of the engine.",opts:[ok("Timing chain"),ok("Belt, replaced with receipt"),opt("Belt, not replaced or unknown",()=>(miles()||0)>=90000?"major":"minor",[500,1100],()=>(miles()||0)>=90000?"Timing belt likely overdue at this mileage: $500–1,100":"Timing belt history unknown: find out when it's due")]},
+ {id:"title",t:"choice",grp:"Paperwork",label:"Title",how:"Ask to see the title and the seller's ID.",spec:"Seller's name matches the title. Title is clean (not salvage, rebuilt, or flood). Any lienholder must be paid off at the sale.",opts:[ok("Clean, in seller's name"),opt("Lien on title","minor",null,"Lien on title: complete the sale at the lender or get a lien release"),opt("Not in seller's name","critical",null,"Title isn't in the seller's name (possible curbstoner or stolen car)",{tag:"seller"}),opt("Branded: salvage, rebuilt, or flood","critical",null,"Branded title",{tag:"flood"})]},
+ {id:"vinmatch",t:"choice",grp:"Paperwork",label:"VIN matches everywhere",spec:"17 characters. The dashboard plate (through the windshield), driver door jamb sticker, title, and history report all match. No scratched or re-riveted plates.",opts:[ok("All match"),opt("Mismatch, missing, or tampered","critical",null,"VIN mismatch or tampering")]},
+ {id:"keys",t:"choice",grp:"Paperwork",label:"Keys and fobs",opts:[ok("Two or more"),opt("Only one","minor",[150,500],"Only one key: a replacement key or fob runs $150–500")]},
+ {id:"warm",t:"choice",grp:"Paperwork",label:"Was the engine cold when you arrived?",how:"Touch the hood and the upper radiator hose before anyone starts it.",spec:"A cold engine shows starting, smoke, and noise problems that a warm one can hide.",opts:[ok("Cold"),opt("Warm: it had been running","minor",null,"Engine was warm on arrival: cold-start problems may be hidden",{tag:"warm"})]}
+]},
+
+{id:"exterior",title:"Exterior",short:"Exterior",blurb:"Walk around twice in daylight: once from about 10 feet for the overall look, then up close panel by panel.",items:[
+ {id:"stance",t:"check",label:"Sits level",spec:"From 10 ft back, the car sits level side to side and front to back. No sagging corner.",sev:"major",cost:[300,1000],issue:"Car sits unevenly: worn spring or strut, or suspension damage"},
+ {id:"gaps",t:"choice",label:"Panel gaps",spec:"Gaps are even and match side to side, about 3–5 mm (a pencil's width). Hood, doors, and trunk close flush.",opts:[ok("Even and flush"),opt("Uneven or not flush","major",null,"Uneven panel gaps: likely collision repair",{tag:"crash"})]},
+ {id:"paint",t:"choice",label:"Paint match & overspray",how:"Look down each side at an angle. Check rubber seals, trim, door jambs, and under the hood edge.",spec:"One uniform color and texture. Overspray on rubber or trim, tape lines, or a different texture on one panel means it was repainted.",opts:[ok("Uniform factory finish"),opt("One panel repainted","minor",null,"Repainted panel: ask why and check the history report",{tag:"crash"}),opt("Overspray or several repainted panels","major",null,"Several repainted panels or overspray: collision repair likely",{tag:"crash"})]},
+ {id:"paintgauge",t:"num",label:"Paint thickness (if you have a gauge)",unit:"mils",spec:"Factory paint: about 3–7 mils (75–180 µm). Around 8–12 mils: repainted. Over 12 mils: body filler likely underneath.",grade:v=>v<=0?{err:"Enter a reading in mils"}:v<=7.5?{g:"ok",f:`${v} mils: factory range`}:v<=12?{g:"minor",f:`${v} mils: this panel has been repainted`,tag:"crash"}:{g:"major",f:`${v} mils: body filler likely under the paint`,tag:"crash"}},
+ {id:"bondo",t:"choice",label:"Body filler (magnet & tap test)",how:"Slide the wrapped magnet along lower doors, fenders, quarter panels, and wheel arches. Tap with a knuckle.",spec:"Magnet holds firmly on steel panels, and metal sounds solid. Weak spots or a dull thud mean filler. Aluminum and plastic panels never hold a magnet, so compare with the same panel on the other side.",opts:[ok("Holds everywhere"),opt("Weak spots or dull sound","major",null,"Body filler found: hidden collision or rust repair",{tag:"crash"})]},
+ {id:"scratch",t:"choice",label:"Scratches & clear coat",opts:[ok("Normal for its age"),opt("Deep scratches or peeling clear coat","minor",[200,800],"Paint damage: about $300–800 per panel to respray")]},
+ {id:"dents",t:"choice",label:"Dents",opts:[ok("None or tiny dings"),opt("Small dents","minor",[75,300],"Small dents: paintless dent repair $75–250 each"),opt("Large or creased dents","minor",[400,1500],"Large dents need bodywork and paint")]},
+ {id:"bodyrust",t:"choice",label:"Body rust",how:"Check wheel arches, rocker panels below the doors, door bottoms, the trunk lip, and around the windshield.",opts:[ok("None"),opt("Small surface spots","minor",[150,600],"Surface rust spots: treat before they spread"),opt("Bubbling paint or scaly rust","major",[800,2500],"Rust bubbling under the paint: it's worse underneath"),opt("Rust holes","critical",null,"Rust-through on the body")]},
+ {id:"windshield",t:"choice",label:"Windshield",spec:"Chips smaller than a quarter (about 1 in) can usually be repaired. Cracks over 6 in, or damage in the driver's view, need a new windshield and can fail state inspection. Cars with lane-keeping cameras need recalibration after replacement.",opts:[ok("No damage"),opt("Small repairable chip","minor",[50,150],"Windshield chip repair $50–150"),opt("Crack, or damage in driver's view","minor",[300,1000],"Windshield replacement $300–1,000 (more with camera recalibration)")]},
+ {id:"glass",t:"check",label:"Side glass & mirrors",spec:"No cracks in side or rear windows, mirror glass, or mirror housings.",sev:"minor",cost:[100,400],issue:"Damaged glass or mirror"},
+ {id:"lenses",t:"choice",label:"Headlight & taillight lenses",spec:"Lenses are clear. Yellowed or foggy headlights cut light output. Moisture or cracks mean a broken seal.",opts:[ok("Clear"),opt("Foggy or yellowed","minor",[30,150],"Foggy headlights: $20–30 restoration kit, or $50–150 professionally"),opt("Moisture inside, or cracked","minor",[150,600],"Light housing needs replacement")]},
+ {id:"wiperblades",t:"check",label:"Wiper blades",spec:"Rubber is soft and intact, not cracked or torn.",sev:"minor",cost:[30,60],issue:"Replace wiper blades"},
+ {id:"sticker",t:"choice",label:"Inspection & registration stickers",opts:[ok("Current"),opt("Expired","minor",null,"Inspection expired: ask why, and make the sale conditional on passing"),opt("Not required in my state","na")]}
+]},
+
+{id:"wheels",title:"Tires & wheels",short:"Tires",blurb:"Turn the steering to full lock (or look behind the wheel) to see the inner edge of the front tires.",items:[
+ {id:"tread",t:"num",label:"Lowest tread depth",unit:"/32 in",how:"Measure the inner, center, and outer grooves on all four tires. Enter the lowest reading.",spec:"New: 10–11/32. Replace at 4/32. Legal minimum: 2/32. Penny test: all of Lincoln's head visible = 2/32 or less. Quarter test: top of Washington's head visible = under 4/32.",grade:v=>v<0||v>20?{err:"Enter a depth between 0 and 20"}:v>=6?{g:"ok",f:`${v}/32: plenty of tread left`}:v>4?{g:"minor",c:[600,1200],f:`${v}/32: budget for new tires within about a year`,tag:"tires"}:{g:"major",c:[600,1200],f:`${v}/32: at or below the replacement point; a new set runs $600–1,200`,tag:"tires"}},
+ {id:"tirematch",t:"choice",label:"All four tires match",spec:"Same brand, model, and size on every sidewall (for example 225/45R17). On AWD and 4WD, all four should be within about 2/32 of each other in tread depth.",opts:[ok("Matching set"),opt("Mixed brands, sizes, or wear",()=>isAWD()?"major":"minor",[300,1200],()=>isAWD()?"Mismatched tires on AWD/4WD can damage the center differential or transfer case":"Mismatched tires: replace in pairs or as a set",{tag:"tires"})]},
+ {id:"wear",t:"choice",label:"Tread wear pattern",spec:"Even across the tread is good. One edge only = alignment (camber or toe). Center only = over-inflated. Both edges = under-inflated. Scalloped or cupped = worn shocks or struts.",opts:[ok("Even"),opt("One edge worn","minor",[100,250],"Uneven edge wear: alignment needed ($100–200); check for worn suspension parts"),opt("Center or both edges","minor",null,"Wear from wrong tire pressure: tires may wear out early"),opt("Cupped or scalloped","major",[500,1200],"Cupped tires: worn shocks or struts")]},
+ {id:"tireyear",t:"num",label:"Oldest tire's year (DOT code)",unit:"year",how:"Find the oval DOT code on the sidewall. The last four digits are week and year.",spec:`Example: 3219 = week 32 of 2019. Replace tires 6+ years old regardless of tread, because the rubber hardens and cracks.`,grade:v=>{if(v<100)v+=2000;if(v<1990||v>Y)return{err:`Enter a year between 1990 and ${Y}`};const a=Y-v;return a<=5?{g:"ok",f:`About ${a} year${a===1?"":"s"} old`}:a<10?{g:"minor",c:[600,1200],f:`About ${a} years old: plan to replace soon`,tag:"tires"}:{g:"major",c:[600,1200],f:`About ${a} years old: replace before relying on them`,tag:"tires"}}},
+ {id:"sidewall",t:"choice",label:"Sidewalls",spec:"No bulges, bubbles, deep cuts, or cracking. A bulge means internal damage, and the tire can fail.",opts:[ok("Good"),opt("Dry-rot cracking","minor",[600,1200],"Cracked sidewalls: tires are aging out",{tag:"tires"}),opt("Bulge or bubble","major",[150,300],"Sidewall bulge: unsafe, replace that tire now",{tag:"tires"})]},
+ {id:"wheeldmg",t:"choice",label:"Wheels",spec:"Look for curb rash, bends on the inner lip, and cracks. Bent wheels cause vibration at speed.",opts:[ok("Good"),opt("Curb rash","minor",[75,200],"Curb rash: cosmetic wheel repair $75–200 each"),opt("Bent or cracked","major",[200,800],"Bent or cracked wheel: replace")]},
+ {id:"brakesvis",t:"choice",label:"Brake rotors & pads (through the spokes)",spec:"Light orange rust after the car sits is normal. Watch for a raised lip on the rotor's outer edge, deep grooves, or blue heat spots. Pads at 3 mm (about 1/8 in) or less need replacing; new pads are 10–12 mm.",opts:[ok("Good"),opt("Lip, grooves, or thin pads","minor",[300,700],"Brakes due: pads and rotors $300–700 per axle"),opt("Heavy rust from sitting","minor",[300,700],"Heavily rusted rotors: the car likely sat a long time")]},
+ {id:"lugkey",t:"choice",label:"Locking lug nut key",spec:"If one lug nut per wheel has a special pattern, the key is usually in the glovebox or trunk. Without it, you can't change a flat.",opts:[ok("Key present"),ok("No locking lug nuts"),opt("Locks fitted, key missing","minor",[20,80],"Missing lug nut key: replacement or removal $20–80")]}
+]},
+
+{id:"under",title:"Under the car",short:"Under",blurb:"Do this before the engine runs, while the exhaust is cold. Use the flashlight from the front, both sides, and the rear. Never get under a car that's held up only by a jack.",items:[
+ {id:"groundold",t:"choice",label:"Ground where it was parked",spec:"Oil is brown or black. Coolant is green, orange, or pink and smells sweet. Transmission fluid is red. Gear oil is thick with a strong smell. Clear water under the A/C area is normal.",opts:[ok("Clean, or only water"),opt("Old stains","minor",null,"Old fluid stains where it's parked: recheck after the drive"),opt("Fresh drips","major",[300,1500],"Fresh fluid drips under the car")]},
+ {id:"underleaks",t:"choice",label:"Leaks on the underside",spec:"Look up at the oil pan, transmission pan, and lines. A dry, dusty film is common on older cars. Wet, shiny fluid that drips is not.",opts:[ok("Dry"),opt("Damp film or seepage","minor",[150,500],"Seepage underneath: a gasket or seal, $150–500"),opt("Wet and dripping","major",[300,1500],"Active leak underneath: diagnose before buying")]},
+ {id:"framerust",t:"choice",label:"Frame & underbody rust",how:"Press suspicious spots with a key or a screwdriver handle.",spec:"Light surface rust on steel parts is normal, especially in snow states. Scale that flakes off in layers, or metal that crumbles or has holes, is not.",opts:[ok("None, or light surface rust"),opt("Heavy, flaking scale","major",[500,3000],"Heavy underbody rust: it will keep getting worse"),opt("Holes or crumbling frame metal","critical",null,"Frame or floor rot: unsafe")]},
+ {id:"framedmg",t:"choice",label:"Frame damage",spec:"Frame rails are straight, with no kinks, crimps, or wrinkles. No fresh welds, clamp marks, or fresh undercoating in one area. Crush zones behind the bumpers are smooth.",opts:[ok("Straight, no repairs"),opt("Kinks, welds, or bent rails","critical",null,"Frame damage from a collision",{tag:"crash"})]},
+ {id:"exhaust",t:"choice",label:"Exhaust system",spec:"Pipes, muffler, and catalytic converter are all present and solid, with hangers in place. Black soot at a joint means a leak.",opts:[ok("Solid"),opt("Loose heat shield or rusty hangers","minor",[50,200],"Exhaust heat shield or hanger repair"),opt("Holes or leaking joints","minor",[200,800],"Exhaust leak repair $200–800"),opt("Catalytic converter missing or damaged","major",[1000,3000],"Catalytic converter replacement $1,000–3,000")]},
+ {id:"susp",t:"choice",label:"Suspension & steering parts",spec:"Rubber boots on the tie rod ends and ball joints are intact, not torn or slinging grease. No bent control arms or cracked bushings.",opts:[ok("Intact"),opt("Torn boots or cracked bushings","minor",[150,500],"Worn suspension rubber: tie rod ends or ball joints $150–500"),opt("Bent or damaged parts","major",[400,1500],"Bent suspension parts: curb or collision damage",{tag:"crash"})]},
+ {id:"cvboots",t:"choice",label:"CV axle boots",when:()=>drv(["fwd","awd","4wd"]),spec:"The ribbed rubber boots behind the front wheels (and rear on AWD). A torn boot slings dark grease around the wheel well, and the joint fails soon after.",opts:[ok("Intact"),opt("Torn or greasy","minor",[250,600],"CV axle replacement $250–600")]},
+ {id:"shocks",t:"choice",label:"Shocks & struts (bounce test)",how:"Push down hard on each corner and let go.",spec:"The car rebounds once and settles. More than 1–2 bounces, or oily, wet shock bodies, mean they're worn.",opts:[ok("Rebounds once"),opt("Bouncy or leaking","major",[500,1200],"Worn shocks or struts: $500–1,200 per pair")]},
+ {id:"diff",t:"choice",label:"Rear differential & transfer case",when:()=>drv(["rwd","awd","4wd"]),spec:"No wet gear oil around the differential cover, the pinion seal, the axle ends, or (on 4WD) the transfer case.",opts:[ok("Dry"),opt("Seeping","minor",[150,400],"Differential seal seep: $150–400"),opt("Dripping","major",[300,1000],"Differential or transfer case leak")]}
+]},
+
+{id:"hood",title:"Under the hood",short:"Hood",blurb:"Engine off and cold. Never open the radiator or coolant reservoir cap on a hot engine.",items:[
+ {id:"hoodopen",t:"choice",label:"Hood release & supports",spec:"The hood pops open easily, and the prop rod or gas struts hold it up.",opts:[ok("Works"),opt("Weak struts or sticky release","minor",[40,150],"Hood struts or release cable $40–150")]},
+ {id:"bay",t:"choice",label:"Engine bay condition",spec:"Light dust and grime is normal. A freshly power-washed engine on an older car can hide leaks.",opts:[ok("Normal grime"),opt("Freshly cleaned or wet","minor",null,"Engine bay freshly cleaned: may hide leaks; recheck after the drive"),opt("Very oily","minor",null,"Oily engine bay: find where the oil is coming from")]},
+ {id:"collision",t:"choice",label:"Signs of front-end repair",spec:"Check the radiator support, fender bolts (wrench marks or broken paint on bolt heads), missing factory stickers, and new headlights or radiator on an old car.",opts:[ok("Nothing replaced"),opt("Some new parts or tool marks","major",null,"Front-end parts replaced: possible collision",{tag:"crash"}),opt("Bent or welded radiator support or frame rails","critical",null,"Structural front-end damage",{tag:"crash"})]},
+ {id:"leaks",t:"choice",label:"Leaks in the engine bay",how:"Look at the valve cover edges, around the oil filter, hoses, and the bottom of the engine. Dab with a paper towel to see the color.",spec:"Oil is brown or black. Coolant is green, orange, or pink and smells sweet. Transmission and power steering fluid are red or clear.",opts:[ok("Dry"),opt("Seepage or light film","minor",[150,500],"Minor seepage, such as a valve cover gasket: $200–500"),opt("Active drip","major",[300,1500],"Active engine leak: diagnose before buying")]},
+ {id:"oil",t:"choice",label:"Oil level & condition (dipstick)",how:"Pull, wipe, reinsert fully, pull again. Rub a drop between your fingers.",spec:"Level between the MIN and MAX marks. Amber (fresh) to dark brown, and smooth. Red flags: milky or tan (coolant in the oil), grit or metal flakes, a gasoline smell.",opts:[ok("In range, clean"),opt("Dark or a little low: change due","minor",[50,120],"Oil change due"),opt("Very low or empty","major",null,"Oil very low: neglect, or the engine burns or leaks oil"),opt("Milky, frothy, or metal flakes","critical",null,"Coolant or metal in the oil: head gasket or internal engine damage",{tag:"hg"})]},
+ {id:"oilcap",t:"choice",label:"Underside of oil filler cap",spec:"Clean, or lightly coated in oil. Light-brown, mayonnaise-like sludge can mean coolant in the oil. A little condensation can come from short trips in cold weather.",opts:[ok("Clean"),opt("A little condensation","minor",null,"Some condensation under the oil cap: recheck after the drive"),opt("Heavy milky sludge","critical",null,"Milky sludge under the oil cap",{tag:"hg"})]},
+ {id:"coolant",t:"choice",label:"Coolant level & color (engine cold)",spec:"Level between MIN and MAX on the overflow reservoir. Clean, bright green, orange, pink, or blue. Red flags: rusty brown, an oily film, or empty.",opts:[ok("Good level and color"),opt("Low","minor",[100,250],"Coolant low: look for a leak"),opt("Rusty or dirty","minor",[100,200],"Coolant flush due: $100–200"),opt("Oily film, or empty","critical",null,"Oil in the coolant, or no coolant",{tag:"hg"})]},
+ {id:"atf",t:"choice",label:"Transmission fluid (automatic)",when:isAuto,how:"Many cars check with the engine warm and running in Park; follow the dipstick markings.",spec:"Pink or red and see-through. Brown means service is overdue; black or a burnt smell means internal wear. Many newer cars have sealed transmissions with no dipstick.",opts:[ok("Pink or red, full"),opt("Sealed, no dipstick","na"),opt("Dark brown","minor",[150,350],"Transmission fluid service overdue: $150–350"),opt("Black or burnt smell","major",[2500,4500],"Burnt transmission fluid: likely internal wear; a rebuild runs $2,500–4,500",{tag:"trans"})]},
+ {id:"brakefluid",t:"choice",label:"Brake fluid",spec:"Clear to light amber, between MIN and MAX. Dark brown means it's old (replace every 2–3 years).",opts:[ok("Good"),opt("Dark","minor",[100,150],"Brake fluid flush $100–150"),opt("Low","minor",[100,300],"Brake fluid low: worn pads or a leak")]},
+ {id:"belts",t:"choice",label:"Drive belt",spec:"No fraying, glazing, or missing chunks. Small cracks every inch or so mean it should be replaced soon.",opts:[ok("Good"),opt("Cracked or frayed","minor",[100,250],"Drive belt replacement $100–250")]},
+ {id:"hoses",t:"choice",label:"Hoses",spec:"Squeeze the radiator hoses (cold only): firm but flexible. Not mushy, swollen, or brittle. No crusty residue at the clamps.",opts:[ok("Good"),opt("Soft, swollen, or crusty","minor",[150,400],"Coolant hose replacement $150–400")]},
+ {id:"batv",t:"num",label:"Battery voltage (engine off)",unit:"V",how:"Multimeter on DC volts, red to + and black to −.",spec:"12.6 V or more is fully charged. 12.4 V is about 75%. Under 12.2 V is weak or discharged. Check the date sticker: batteries last about 3–5 years.",grade:v=>v<5||v>16?{err:"Enter a reading between 5 and 16 volts"}:v>13.0?{g:"minor",f:`${v} V with the engine off: it was just running or charging, so this reading isn't reliable`,tag:"warm"}:v>=12.4?{g:"ok",f:`${v} V: healthy`}:v>=12.0?{g:"minor",c:[150,300],f:`${v} V: weak or discharged battery`}:{g:"minor",c:[150,300],f:`${v} V: battery likely needs replacing ($150–300)`}},
+ {id:"batterm",t:"choice",label:"Battery terminals & age",opts:[ok("Clean, under 4 years old"),opt("Corroded terminals","minor",null,"Corroded battery terminals: clean them"),opt("5 or more years old","minor",[150,300],"Battery near end of life: $150–300")]},
+ {id:"wiring",t:"check",label:"Wiring",spec:"No chewed wires (rodents), melted insulation, electrical-tape splices, or messy aftermarket wiring.",sev:"minor",cost:[100,600],issue:"Wiring problems: risk of electrical faults"}
+]},
+
+{id:"cold",title:"Cold start",short:"Start",blurb:"Start it yourself while a helper watches the exhaust, or have the seller start it while you stand behind the car. Once it's idling, move on to the interior, lights, and trunk while it warms up.",items:[
+ {id:"keyon",t:"choice",label:"Warning lights at key-on",how:"Turn the key to ON (or press Start without your foot on the brake) without starting the engine.",spec:"Check engine, airbag (SRS), ABS, oil, and battery lights all light up, then go out within a few seconds after the engine starts. A light that never comes on may have been disabled to hide a fault.",opts:[ok("All light up, then go out"),opt("Check engine light stays on","major",null,"Check engine light on: scan the codes"),opt("Airbag (SRS) light stays on","major",[200,1500],"Airbag light on: SRS fault, can fail inspection"),opt("ABS or traction light stays on","major",[200,1200],"ABS fault: sensor $150–300, module $800+"),opt("A light never comes on","major",null,"A warning bulb may have been disabled to hide a fault",{tag:"seller"})]},
+ {id:"crank",t:"choice",label:"Starting",spec:"The engine fires within 1–2 seconds of cranking.",opts:[ok("Starts quickly"),opt("Long crank","minor",[150,800],"Long crank: fuel pump, sensor, or battery"),opt("Needs several tries","major",[200,1200],"Hard starting: diagnose before buying")]},
+ {id:"coldnoise",t:"choice",label:"Engine noise at startup",spec:"A brief tick for 1–3 seconds can be normal. A deep, rhythmic knock means rod or bearing wear. A squeal is a belt. A rattle at startup can be the timing chain tensioner.",opts:[ok("Smooth, or a brief tick that fades"),opt("Belt squeal","minor",[100,250],"Belt squeal: belt or tensioner $100–250"),opt("Persistent ticking","major",[300,2000],"Persistent ticking: lifters, valve adjustment, or exhaust leak"),opt("Rattle on startup","major",[800,2500],"Startup rattle: possible timing chain or tensioner, $800–2,500"),opt("Deep knock","critical",null,"Engine knock: possible rod or bearing failure")]},
+ {id:"smokecold",t:"choice",label:"Exhaust at startup",spec:"Thin white vapor that clears within a minute is normal condensation. Blue or gray = burning oil. Thick white smoke that smells sweet = coolant (head gasket). Black = running rich.",opts:[ok("Clear, or thin vapor that clears"),opt("Blue or gray smoke","major",[500,3000],"Blue smoke: burning oil (rings, valve seals, or turbo)"),opt("Thick white, sweet smell","critical",null,"Thick white exhaust smoke: coolant burning",{tag:"hg"}),opt("Black smoke","major",[200,1000],"Black smoke: running rich (injectors, sensors, or air filter)")]},
+ {id:"idle",t:"choice",label:"Idle",spec:"A cold engine idles high, about 1,000–1,500 rpm, then drops to about 600–900 rpm as it warms. The needle stays steady and the car doesn't shake.",opts:[ok("High, then settles smoothly"),opt("Rough or hunting","major",[150,1000],"Rough idle: misfire, vacuum leak, or sensor"),opt("Stalls","major",[200,1200],"Engine stalls at idle")]},
+ {id:"mounts",t:"choice",label:"Engine movement (mounts)",how:"Foot firmly on the brake, hood open. A helper shifts from Drive to Reverse, or briefly blips the throttle in Park, while you watch the engine.",spec:"The engine rocks slightly (under about an inch) and settles. A big lurch or a clunk means worn mounts.",opts:[ok("Small rock, settles"),opt("Big lurch or clunk","minor",[200,600],"Worn engine or transmission mounts: $200–600")]},
+ {id:"blowby",t:"choice",label:"Oil filler cap test (running)",how:"At idle, carefully remove the oil filler cap. Keep hands clear of belts.",spec:"Light puffs of vapor are normal. Heavy smoke pouring out, or pulses strong enough to push the cap up, mean excessive blow-by.",opts:[ok("Light vapor"),opt("Heavy smoke or pressure","major",[1500,4000],"Excessive blow-by: worn piston rings")]},
+ {id:"runv",t:"num",label:"Battery voltage (engine running)",unit:"V",spec:"13.7–14.7 V means the alternator is charging normally. Some newer cars with smart charging read 12.8–13.5 V at times; recheck with headlights and A/C on. Under 13 V = not charging. Over 15 V = overcharging.",grade:v=>v<5||v>17?{err:"Enter a reading between 5 and 17 volts"}:v>14.9?{g:"major",c:[400,900],f:`${v} V: overcharging (voltage regulator or alternator)`}:v>=13.5?{g:"ok",f:`${v} V: charging normally`}:v>=13.0?{g:"minor",f:`${v} V: low charging voltage; recheck with lights on (some newer cars run this low)`}:{g:"major",c:[400,900],f:`${v} V: alternator may not be charging ($400–900)`}},
+ {id:"obd1",t:"choice",label:"OBD-II scan",how:"Plug the scanner into the port under the dash on the driver's side. Read stored codes, pending codes, and readiness (I/M) monitors.",spec:"Good: no stored or pending codes, and all monitors Ready. One Not Ready is allowed on 2001+ cars, often EVAP. P1000 (Ford, Mazda) or several Not Ready monitors means codes were cleared or the battery was disconnected recently.",opts:[ok("No codes, monitors ready"),opt("Pending or stored codes","major",null,"Trouble codes present: diagnose before buying",{ph:"Write down the codes, e.g. P0420, P0301"}),opt("Monitors not ready, or P1000","major",null,"Codes recently cleared or battery disconnected: problems may be hidden",{tag:"codes"})]}
+]},
+
+{id:"interior",title:"Interior",short:"Interior",blurb:"Check while the engine idles. Try every switch you can find.",items:[
+ {id:"smell",t:"choice",grp:"Condition",label:"Smell",spec:"A musty or mildew smell means a water leak or flood. Heavy air freshener can mask smoke or mildew.",opts:[ok("Normal"),opt("Cigarette smoke","minor",[150,400],"Smoke smell: ozone treatment and detail $150–400"),opt("Strong air freshener","minor",null,"Heavy air freshener: may be masking an odor"),opt("Musty or mildew","major",null,"Musty smell: water leak or possible flood damage",{tag:"flood"})]},
+ {id:"carpet",t:"choice",grp:"Condition",label:"Under carpets & floor mats",how:"Lift the floor mats and the carpet edge at each door, front and rear. Press down for dampness.",spec:"Dry, with no rust on the seat bolts or floor pan. Silt, sand, or a water line means a flood car.",opts:[ok("Dry and clean"),opt("Stains or wear","minor",[100,300],"Carpet stains or wear: shampoo or replace"),opt("Damp","major",[200,1500],"Damp carpet: water leak (door seals, sunroof drains, heater core)",{tag:"flood"}),opt("Silt, rusty seat rails, or water lines","critical",null,"Signs of flood damage",{tag:"flood"})]},
+ {id:"seats",t:"choice",grp:"Condition",label:"Seats (front & rear)",spec:"Look for rips, tears, burns, and stains. Wear on the driver's outer bolster should match the mileage.",opts:[ok("Good"),opt("Stains or light wear","minor",[100,300],"Upholstery cleaning or repair"),opt("Rips or burns","minor",[150,500],"Seat upholstery repair $150–500")]},
+ {id:"seatadj",t:"check",grp:"Condition",label:"Seat adjustments",spec:"Forward and back, recline, height, and lumbar (manual or power) all move and lock in place.",sev:"minor",cost:[100,500],issue:"Seat adjuster or motor fault"},
+ {id:"wearparts",t:"choice",grp:"Condition",label:"Wear on steering wheel, pedals & shifter",spec:"A shiny steering wheel, worn pedal rubber, and a worn shift knob are normal past about 100,000 miles. Heavy wear on a low-mileage car suggests odometer tampering.",opts:[ok("Matches the mileage"),opt("Heavier than the mileage suggests",()=>(miles()||0)<80000?"major":"minor",null,"Wear doesn't match the odometer: check the history report",{tag:"wear"})]},
+ {id:"odomatch",t:"choice",grp:"Condition",label:"Odometer matches listing & records",opts:[ok("Matches"),opt("Doesn't match","critical",null,"Odometer doesn't match the listing or records",{tag:"odo"})]},
+ {id:"headliner",t:"choice",grp:"Condition",label:"Headliner",opts:[ok("Good"),opt("Sagging","minor",[200,500],"Headliner replacement $200–500"),opt("Water stains","major",[200,1000],"Headliner water stains: roof or sunroof leak",{tag:"flood"})]},
+ {id:"seatbelts",t:"check",grp:"Condition",label:"Seat belts",spec:"Each belt pulls out smoothly, retracts fully, and locks on a sharp tug. Webbing isn't frayed.",sev:"major",cost:[100,400],issue:"Seat belt fault: a safety item"},
+ {id:"dash",t:"check",grp:"Controls & comfort",label:"Gauges & dash display",spec:"Speedometer, tachometer, fuel, and temperature gauges all work (confirm on the drive). No dead pixels on a digital cluster.",sev:"minor",cost:[100,600],issue:"Gauge or display fault"},
+ {id:"windows",t:"check",grp:"Controls & comfort",label:"Power windows",spec:"Each window goes down and up from its own switch and from the driver's master switch. Smooth, not slow or grinding.",sev:"minor",cost:[250,500],issue:"Window regulator or motor: $250–500 each"},
+ {id:"locks",t:"check",grp:"Controls & comfort",label:"Power locks & key fob",spec:"All doors lock and unlock from the fob, the driver's switch, and each door's own lock.",sev:"minor",cost:[150,400],issue:"Door lock actuator: $150–400"},
+ {id:"mirrors",t:"check",grp:"Controls & comfort",label:"Power mirrors",spec:"Both mirrors adjust in every direction. Heated mirrors warm up, if equipped.",sev:"minor",cost:[100,400],issue:"Mirror motor or heater fault"},
+ {id:"acvent",t:"num",grp:"Controls & comfort",label:"A/C vent temperature",unit:"°F",how:"A/C on max cold, recirculate on, fan on high, windows closed. Wait 3–5 minutes, then put a thermometer in the center vent.",spec:"35–45°F at the center vent on a 70–90°F day. Above 50°F points to low refrigerant or a weak compressor. Try every fan speed and vent mode (face, feet, defrost).",grade:v=>v<20||v>120?{err:"Enter a vent temperature in °F"}:v<=45?{g:"ok",f:`${v}°F: A/C is cooling well`}:v<=55?{g:"minor",c:[150,350],f:`${v}°F: weak; likely low refrigerant (leak check and recharge $150–350)`}:{g:"major",c:[800,2000],f:`${v}°F: A/C barely cooling; compressor or leak, $800–2,000`}},
+ {id:"heat",t:"check",grp:"Controls & comfort",label:"Heater & front defrost",spec:"Hot air within 5–10 minutes of driving (about 120–160°F at the vent). The blower works on every speed. No heat at all can also mean low coolant.",sev:"minor",cost:[100,1000],issue:"Heater problem: blower resistor ($100–250) up to heater core ($800–1,500)"},
+ {id:"reardef",t:"check",grp:"Controls & comfort",label:"Rear defroster",spec:"The grid lines clear fog or frost from the rear glass within a few minutes.",sev:"minor",cost:[50,300],issue:"Rear defroster not working"},
+ {id:"radio",t:"check",grp:"Controls & comfort",label:"Radio & speakers",spec:"AM/FM and Bluetooth work. Use balance and fade to test every speaker. If the clock and presets were reset, the battery may have been disconnected recently.",sev:"minor",cost:[100,400],issue:"Audio problem"},
+ {id:"nav",t:"check",grp:"Controls & comfort",label:"Touchscreen & navigation",when:()=>has("nav"),spec:"The screen responds to touch, GPS finds your location, and your phone pairs (CarPlay or Android Auto, if equipped).",sev:"minor",cost:[200,1200],issue:"Infotainment screen fault"},
+ {id:"camera",t:"check",grp:"Controls & comfort",label:"Backup camera",when:()=>has("camera"),spec:"Clear picture as soon as you shift into Reverse.",sev:"minor",cost:[150,500],issue:"Backup camera fault"},
+ {id:"psensors",t:"check",grp:"Controls & comfort",label:"Parking sensors",when:()=>has("psensors"),spec:"Beeping speeds up as you back toward an object.",sev:"minor",cost:[100,400],issue:"Parking sensor fault"},
+ {id:"heatseats",t:"check",grp:"Controls & comfort",label:"Heated seats",when:()=>has("heatseats"),spec:"Each seat gets warm within 2–3 minutes on every setting.",sev:"minor",cost:[150,500],issue:"Seat heater element fault"},
+ {id:"sunroof",t:"check",grp:"Controls & comfort",label:"Sunroof",when:()=>has("sunroof"),spec:"Opens, tilts, and closes fully without grinding. No water stains on the headliner around it (clogged drains).",sev:"minor",cost:[200,1500],issue:"Sunroof fault"},
+ {id:"autodim",t:"check",grp:"Controls & comfort",label:"Auto-dimming mirror",when:()=>has("autodim"),spec:"Cover the forward-facing sensor with your hand in a shaded spot; the mirror should darken.",sev:"minor",cost:[150,400],issue:"Auto-dim mirror fault"},
+ {id:"intlights",t:"check",grp:"Controls & comfort",label:"Interior lights",spec:"Dome, map, glovebox, and trunk lights, and the dash and switch backlighting.",sev:"minor",cost:[10,60],issue:"Interior bulbs out"},
+ {id:"wipers",t:"check",grp:"Controls & comfort",label:"Wipers & washers",spec:"Every speed, intermittent, and the rear wiper if equipped. Washer fluid sprays on both sides.",sev:"minor",cost:[30,200],issue:"Wiper or washer fault"},
+ {id:"horn",t:"check",grp:"Controls & comfort",label:"Horn",sev:"minor",cost:[50,150],issue:"Horn doesn't work (fails inspection)"},
+ {id:"tint",t:"choice",grp:"Controls & comfort",label:"Window tint",spec:"Check your state's legal limit (VLT %). Bubbling or purple tint is old film.",opts:[ok("None, or clean and legal"),opt("Bubbling or peeling","minor",[100,300],"Tint removal $100–300"),opt("Too dark for my state","minor",[100,300],"Illegal tint: removal $100–300")]},
+ {id:"manual",t:"check",grp:"Controls & comfort",label:"Owner's manual",spec:"Usually in the glovebox.",sev:"minor",cost:null,issue:"No owner's manual"}
+]},
+
+{id:"lights",title:"Lights",short:"Lights",blurb:"Easiest with a helper. On your own, pull up to a wall or a shop window and watch the reflection.",items:[
+ {id:"lowbeam",t:"check",label:"Low beams",sev:"minor",cost:[20,150],issue:"Headlight bulb out"},
+ {id:"highbeam",t:"check",label:"High beams",spec:"The blue indicator lights up on the dash.",sev:"minor",cost:[20,150],issue:"High beam out"},
+ {id:"drl",t:"check",label:"Daytime running & parking lights",sev:"minor",cost:[10,100],issue:"Running light out"},
+ {id:"fogs",t:"check",label:"Fog lights",when:()=>has("fog"),sev:"minor",cost:[20,150],issue:"Fog light out"},
+ {id:"fturn",t:"check",label:"Front turn signals",spec:"Steady flashing at about 60–120 per minute. Fast flashing means a bulb is out somewhere.",sev:"minor",cost:[10,60],issue:"Front signal bulb out"},
+ {id:"rturn",t:"check",label:"Rear turn signals & hazards",sev:"minor",cost:[10,60],issue:"Rear signal bulb out"},
+ {id:"brakelt",t:"check",label:"Brake lights, including the third light",spec:"Both sides plus the center high-mount light come on when you press the pedal.",sev:"minor",cost:[10,100],issue:"Brake light out (fails inspection)"},
+ {id:"tail",t:"check",label:"Taillights",sev:"minor",cost:[10,100],issue:"Taillight out"},
+ {id:"reverse",t:"check",label:"Reverse lights",sev:"minor",cost:[10,60],issue:"Reverse light out"},
+ {id:"plate",t:"check",label:"License plate light",sev:"minor",cost:[10,40],issue:"Plate light out"}
+]},
+
+{id:"trunk",title:"Trunk & spare",short:"Trunk",blurb:"Lift the floor panel and look in the spare-tire well.",items:[
+ {id:"trunkfloor",t:"choice",label:"Trunk floor & spare well",spec:"Dry and straight. Water marks or rust mean a leaking seal or taillight. Wrinkled or welded metal means a rear-end collision.",opts:[ok("Dry and straight"),opt("Water marks or damp","major",[100,600],"Trunk leak: seals or taillight gaskets",{tag:"flood"}),opt("Wrinkled or welded metal","major",null,"Rear-end collision repair",{tag:"crash"})]},
+ {id:"spare",t:"choice",label:"Spare tire",spec:"Holds air (temporary spares often take 60 psi; see the sidewall) and isn't cracked. Some cars come with an inflator kit instead of a spare.",opts:[ok("Good"),ok("Inflator kit instead"),opt("Flat or cracked","minor",[100,250],"Spare tire needs replacing"),opt("Missing","minor",[150,350],"Spare tire missing")]},
+ {id:"jack",t:"check",label:"Jack & lug wrench",sev:"minor",cost:[40,100],issue:"Jack or lug wrench missing"},
+ {id:"trunkstrut",t:"check",label:"Trunk or hatch stays open",sev:"minor",cost:[40,150],issue:"Trunk or hatch struts worn"},
+ {id:"mats",t:"check",label:"Floor mats included",sev:"minor",cost:[50,200],issue:"No floor mats"}
+]},
+
+{id:"drive",title:"Test drive",short:"Drive",blurb:"Drive at least 20–30 minutes: a parking lot, city streets with bumps, and the highway. Radio off. Windows up, then down, to listen.",items:[
+ {id:"steerplay",t:"choice",grp:"Parking lot",label:"Steering play & full lock",how:"Parked, engine running, wheels straight. Rock the wheel gently until the tires begin to move. Then turn lock to lock.",spec:"Less than about 1 in (25 mm) of play at the rim. Lock to lock is usually 2.5–3.5 turns. No groaning, whining, or clunks.",opts:[ok("Tight and quiet"),opt("Whine or groan","minor",[150,800],"Power steering whine: low fluid or a worn pump"),opt("Excess play or clunk","major",[300,1200],"Loose steering: tie rods or steering rack")]},
+ {id:"turning",t:"choice",grp:"Parking lot",label:"Tight circles, both ways",how:"At walking pace, drive full-lock circles to the left, then to the right.",spec:"Clicking or popping that speeds up with the wheels means a worn outer CV joint. On AWD or 4WD, binding or hopping can mean mismatched tires or a drivetrain problem.",opts:[ok("Smooth and quiet"),opt("Clicking or popping","minor",[250,600],"Worn CV joint or axle: $250–600"),opt("Groaning or binding","major",[300,1500],"Binding in turns: steering or drivetrain problem")]},
+ {id:"abs",t:"choice",grp:"Parking lot",label:"Hard stop (ABS)",how:"On an empty road or lot with nobody behind you, brake hard from about 30 mph.",spec:"The car stops straight. ABS pulses through the pedal with a buzzing noise, which is normal. The ABS light stays off.",opts:[ok("Straight, ABS works"),opt("Pulls or a wheel locks","major",[200,800],"Brake imbalance under hard braking"),opt("ABS light comes on, or ABS doesn't work","major",[300,1500],"ABS fault")]},
+ {id:"accel",t:"choice",grp:"Around town",label:"Acceleration (gentle & hard)",spec:"Smooth, strong pull with no hesitation, stumble, or pinging. A flashing check engine light means an active misfire; ease off right away.",opts:[ok("Smooth and strong"),opt("Hesitation or stumble","major",[200,1500],"Hesitation under acceleration: misfire, fuel, or sensor"),opt("Pinging or knocking under load","major",[200,2000],"Engine pinging under load"),opt("Check engine light flashes","major",[200,1500],"Flashing check engine light: severe misfire")]},
+ {id:"shiftauto",t:"choice",grp:"Around town",label:"Automatic shifting",when:isAuto,spec:"Shifts are smooth at light throttle, usually around 1,500–3,000 rpm. It engages Drive and Reverse within 1–2 seconds. Slipping means the rpm flares without the car speeding up.",opts:[ok("Smooth and prompt"),opt("Delayed or harsh shifts","major",[150,4500],"Rough shifting: from a fluid service ($150–350) to a rebuild ($2,500–4,500)",{tag:"trans"}),opt("Slipping or flaring","critical",null,"Transmission slipping",{tag:"trans"})]},
+ {id:"clutch",t:"choice",grp:"Around town",label:"Clutch & gearbox (manual)",when:isManual,how:"Note where the clutch engages. Slip test: in 3rd or 4th gear at about 30 mph, press the gas firmly.",spec:"The clutch engages around the middle of the pedal travel. A high engagement point, or rpm rising without the car speeding up, means a worn clutch. No grinding into gears or popping out of gear.",opts:[ok("Engages mid-pedal, no slip"),opt("Engages high, near the top","major",[1200,2500],"Clutch near the end of its life: $1,200–2,500"),opt("Slips under load","major",[1200,2500],"Clutch slipping: replacement $1,200–2,500"),opt("Grinds or pops out of gear","major",[1500,4000],"Gearbox wear: synchros or bearings",{tag:"trans"})]},
+ {id:"brakes",t:"choice",grp:"Around town",label:"Normal braking",spec:"The pedal is firm and stops about a third to halfway down. The car stops straight with your hands light on the wheel. No grinding, squealing, or pulsing.",opts:[ok("Firm, straight, quiet"),opt("Squeal or grinding","minor",[300,700],"Brakes worn: pads and rotors $300–700 per axle"),opt("Pulsing pedal or shaking wheel","minor",[300,700],"Warped rotors: replace rotors and pads"),opt("Pulls to one side","major",[200,600],"Brakes pull: sticking caliper"),opt("Spongy or sinks toward the floor","major",[200,1000],"Soft brake pedal: hydraulic problem, a safety issue")]},
+ {id:"sway",t:"choice",grp:"Around town",label:"Weaving & cornering",how:"At 20–30 mph on a quiet road, gently weave left and right, then take one corner a little firmer.",spec:"Controlled and flat, with no clunks, squeaks, or floaty body roll.",opts:[ok("Controlled and quiet"),opt("Clunk or squeak","minor",[150,800],"Sway bar links or bushings ($150–400), or ball joints"),opt("Floaty or wallowing","major",[500,1200],"Worn shocks or struts")]},
+ {id:"bumps",t:"choice",grp:"Around town",label:"Bumps & rough roads",spec:"Thumps over bumps are muted. Clunks or rattles point to worn strut mounts, sway bar links, ball joints, or bushings.",opts:[ok("Muted and solid"),opt("Clunks or rattles","minor",[200,900],"Suspension clunk: worn links, mounts, or bushings")]},
+ {id:"tracking",t:"choice",grp:"Around town",label:"Drives straight",spec:"On a straight, level road, the car holds its line with the steering wheel centered and your hands light.",opts:[ok("Tracks straight"),opt("Pulls, or wheel off-center","minor",[100,200],"Alignment needed: $100–200")]},
+ {id:"temp",t:"choice",grp:"Around town",label:"Engine temperature gauge",spec:"Rises to the middle within 10–15 minutes (coolant about 195–220°F) and stays there, even in traffic.",opts:[ok("Stays in the middle"),opt("Stays low or cold","minor",[150,300],"Thermostat stuck open: $150–300"),opt("Climbs above the middle","major",[300,2500],"Overheating: radiator, fan, water pump, thermostat, or head gasket",{tag:"hg"})]},
+ {id:"hwy",t:"choice",grp:"Highway",label:"Highway (55–70 mph)",spec:"Smooth and quiet. Vibration in the wheel at 55–70 mph means tire balance or a bent wheel. A hum that grows with speed, or changes when you swerve, is a wheel bearing. Top-gear rpm at 65 mph is usually 1,800–2,800.",opts:[ok("Smooth and quiet"),opt("Vibration at speed","minor",[50,800],"Vibration: tire balance ($50–100) or a bent wheel or tire"),opt("Hum or growl","minor",[250,500],"Wheel bearing: $250–500"),opt("Wind noise or whistle","minor",[50,300],"Door or window seal")]},
+ {id:"passing",t:"choice",grp:"Highway",label:"Passing power (kickdown)",when:isAuto,how:"At cruising speed, press the gas firmly.",spec:"The transmission drops a gear quickly and the car pulls hard, with no flare or thump.",opts:[ok("Quick and strong"),opt("Slow, flares, or thumps","major",[200,4500],"Poor kickdown: transmission needs a diagnosis",{tag:"trans"})]},
+ {id:"cruise",t:"check",grp:"Highway",label:"Cruise control",when:()=>has("cruise"),spec:"Sets, holds speed, resumes, and cancels when you touch the brake.",sev:"minor",cost:[100,500],issue:"Cruise control fault"},
+ {id:"fourwd",t:"choice",grp:"Highway",label:"4WD engagement",when:()=>S.v.drive==="4wd",how:"On gravel, dirt, or a straight road, shift into 4-High at the speed the manual allows.",spec:"The indicator comes on, the front axle engages, and it shifts back to 2WD. Part-time 4WD binds in tight turns on dry pavement, which is normal; don't test it there.",opts:[ok("Engages and releases"),opt("Won't engage, or the light flashes","major",[300,2500],"4WD fault: actuator, transfer case, or hubs")]},
+ {id:"feel",t:"choice",grp:"Highway",label:"Overall feel",spec:"Does it feel solid, comfortable, and predictable? Would you be happy driving it every day?",opts:[ok("Feels good"),opt("Something feels off","minor",null,"Something felt off on the drive",{ph:"What felt off?"})]}
+]},
+
+{id:"after",title:"After the drive",short:"After",blurb:"Park on a clean spot. Leave the engine running for a minute, then shut it off and restart.",items:[
+ {id:"bubbles",t:"choice",label:"Coolant reservoir (don't open the cap)",how:"Engine running and hot. Look at the overflow reservoir through the plastic.",spec:"A steady stream of bubbles, or coolant being pushed out, means combustion gas is getting into the cooling system (head gasket). Never open a hot radiator or pressurized cap.",opts:[ok("Calm, no bubbles"),opt("Bubbling or pushing coolant","critical",null,"Bubbles in the coolant: likely blown head gasket",{tag:"hg"})]},
+ {id:"oilcapwarm",t:"choice",label:"Oil cap & dipstick (warm)",spec:"No froth or milky residue, and the level hasn't dropped.",opts:[ok("Clean"),opt("Frothy or milky","critical",null,"Milky or frothy oil when warm",{tag:"hg"})]},
+ {id:"warmsmoke",t:"choice",label:"Exhaust when warm",spec:"Should be clear, with no visible smoke at all. Persistent white means coolant. Blue means oil.",opts:[ok("Clear"),opt("Blue or gray","major",[500,3000],"Burning oil when warm"),opt("Persistent white, sweet smell","critical",null,"White smoke when warm: coolant burning",{tag:"hg"})]},
+ {id:"groundnew",t:"choice",label:"Look under the car again",spec:"Fresh drips after a drive show active leaks. Note the color. Clear water from the A/C is normal.",opts:[ok("Nothing new"),opt("Fresh drips","major",[300,1500],"Fresh drips after the drive",{ph:"Color and location of the drip"})]},
+ {id:"warmrestart",t:"choice",label:"Warm restart",how:"Shut it off, wait 1–2 minutes, restart.",spec:"Fires right away. A long crank only when hot can mean fuel pressure or a sensor.",opts:[ok("Starts right away"),opt("Slow to start when hot","minor",[150,800],"Hot-start problem: fuel pressure or sensor")]},
+ {id:"obd2",t:"choice",label:"Final OBD-II scan",spec:"Compare with the first scan. New pending codes after the drive point to an intermittent fault the seller may have cleared.",opts:[ok("Still no codes"),opt("New pending or stored codes","major",null,"New codes after the drive",{ph:"Write down the codes",tag:"codes"}),opt("Check engine light now on","major",null,"Check engine light came on during the drive",{ph:"Write down the codes",tag:"codes"})]},
+ {id:"story",t:"choice",label:"Did the seller's story hold up?",spec:"Their answers match the listing, the history report, and what you found on the car.",opts:[ok("Consistent"),opt("Some inconsistencies","major",null,"Seller's story has inconsistencies",{tag:"seller"}),opt("Evasive, or contradicts the history","critical",null,"Seller's story contradicts the facts",{tag:"seller"})]},
+ {id:"ppi",t:"choice",label:"Independent pre-purchase inspection",spec:"Ask to take it to an independent mechanic (usually $100–250) before you pay. A seller who refuses is a red flag.",opts:[ok("Seller agreed"),opt("Not asked yet","na"),opt("Seller refused","major",null,"Seller refused an independent inspection",{tag:"seller"})]}
+]}
+];
+
+const ITEM={}; const SEC_OF={};
+SECTIONS.forEach((s,i)=>s.items.forEach(it=>{ITEM[it.id]=it;SEC_OF[it.id]=i}));
+const visible = it => !it.when || it.when();
+
+/* ------------------------------------------------------------------ */
+/* Evaluation                                                          */
+/* ------------------------------------------------------------------ */
+function ev(it){
+  const r=S.r[it.id]||{};
+  if(r.s==="na") return {done:true,g:"na"};
+  if(it.t==="tick") return r.s===true?{done:true,g:"info"}:{done:false};
+  if(it.t==="text"){const t=(r.v||"").trim();return t?{done:true,g:"info"}:{done:false}}
+  if(it.t==="check"){
+    if(r.s==="ok") return {done:true,g:"ok"};
+    if(r.s==="issue") return {done:true,g:res(it.sev),c:res(it.cost),f:res(it.issue),tag:it.tag};
+    return {done:false};
+  }
+  if(it.t==="choice"){
+    if(typeof r.s!=="number"||!it.opts[r.s]) return {done:false};
+    const o=it.opts[r.s], g=res(o.g);
+    if(g==="na") return {done:true,g:"na"};
+    return {done:true,g,c:res(o.c),f:res(o.f),tag:o.tag,opt:o.l};
+  }
+  if(it.t==="num"){
+    const s=String(r.v==null?"":r.v).trim(); if(!s) return {done:false};
+    const v=parseFloat(s.replace(/,/g,"")); if(isNaN(v)) return {done:false,err:"Enter a number"};
+    const x=it.grade(v)||{}; if(x.err) return {done:false,err:x.err};
+    return Object.assign({done:true,val:v},x);
+  }
+  return {done:false};
+}
+function secStats(i){
+  let done=0,total=0,worst=0,wg="";
+  SECTIONS[i].items.filter(visible).forEach(it=>{total++;const e=ev(it);if(e.done)done++;const rk=RANK[e.g]||0;if(rk>worst){worst=rk;wg=e.g}});
+  return {done,total,wg};
+}
+
+/* ------------------------------------------------------------------ */
+/* Rendering: checklist                                                */
+/* ------------------------------------------------------------------ */
+const $=id=>document.getElementById(id);
+const main=$("main");
+function carName(){const v=S.v;return [v.year,v.make,v.model,v.trim].map(x=>String(x||"").trim()).filter(Boolean).join(" ")||"Untitled vehicle"}
+
+function renderChips(){
+  $("chips").innerHTML=SECTIONS.map((s,i)=>`<button class="chip" data-act="goto" data-i="${i}" aria-current="${S.view==="list"&&S.sec===i}"><span class="d"></span>${i+1}. ${s.short}<span class="n"></span></button>`).join("");
+  updateProgress();
+  const cur=$("chips").querySelector('[aria-current="true"]');
+  if(cur){const c=$("chips");c.scrollLeft=Math.max(0,cur.offsetLeft-c.clientWidth/2+cur.clientWidth/2)}
+}
+function updateProgress(){
+  let d=0,t=0;
+  const chips=$("chips").children;
+  SECTIONS.forEach((s,i)=>{
+    const ch=chips[i]; if(s.custom){if(ch){ch.querySelector(".n").textContent=S.v.make||S.v.model?"✓":""}return}
+    const st=secStats(i); d+=st.done; t+=st.total;
+    if(ch){ch.querySelector(".n").textContent=`${st.done}/${st.total}`;ch.querySelector(".d").dataset.g=st.wg||""}
+  });
+  $("count").textContent=`${d}/${t}`;
+  $("barFill").style.width=(t?Math.round(d/t*100):0)+"%";
+  $("carName").textContent=carName();
+  $("ovBtn").setAttribute("aria-pressed",S.view==="overview");
+}
+
+function itemHTML(it){
+  const r=S.r[it.id]||{};
+  if(it.t==="tick"){
+    return `<div class="item-tick" id="it_${it.id}" data-id="${it.id}"><button class="tick" data-act="tick" aria-pressed="false"><span class="box"></span><span><b>${it.label}</b>${it.how?`<small>${it.how}</small>`:""}</span></button>${it.links?`<div class="links tick-links">${linksHTML(it.links)}</div>`:""}</div>`;
+  }
+  let ctrl="";
+  const na=`<button class="sbtn na" data-act="na" aria-pressed="false">Can't check</button>`;
+  if(it.t==="check"){
+    ctrl=`<div class="seg"><button class="sbtn" data-act="set" data-v="ok" aria-pressed="false">Good</button><button class="sbtn" data-act="set" data-v="issue" data-sev="${res(it.sev)}" aria-pressed="false">Problem</button>${na}</div>`;
+  }else if(it.t==="choice"){
+    ctrl=`<div class="opts">${it.opts.map((o,i)=>{const g=res(o.g);return `<button class="opt" data-act="opt" data-i="${i}" data-g="${g}" aria-pressed="false"><span class="d" data-g="${g}"></span><span>${o.l}</span></button>`}).join("")}</div><div class="row-actions"><span></span>${na.replace('class="sbtn na"','class="linkbtn"')}</div>`;
+  }else if(it.t==="num"){
+    ctrl=`<div class="numrow"><input id="num_${it.id}" data-num="${it.id}" type="text" inputmode="decimal" autocomplete="off" value="${esc(r.v||"")}" aria-label="${esc(it.label)} in ${esc(it.unit)}"><span class="unit">${it.unit}</span>${na}</div>`;
+  }else if(it.t==="text"){
+    ctrl=`<textarea id="txt_${it.id}" data-text="${it.id}" rows="2" placeholder="Their answer">${esc(r.v||"")}</textarea>`;
+  }
+  const notable=it.t!=="text";
+  return `<article class="item" id="it_${it.id}" data-id="${it.id}">
+    <div class="item-head"><h3>${it.label}</h3><span class="gchip"></span></div>
+    ${it.how?`<p class="how">${it.how}</p>`:""}
+    ${it.spec?`<div class="spec"><b>SPEC</b><span>${it.spec}</span></div>`:""}
+    ${it.links?`<div class="links">${linksHTML(it.links)}</div>`:""}
+    ${ctrl}
+    <div class="verdict" hidden></div>
+    ${notable?`<div class="note" hidden><textarea id="n_${it.id}" data-note="${it.id}" rows="2" placeholder="Notes">${esc(r.n||"")}</textarea></div><button class="linkbtn" data-act="note">Add a note</button>`:""}
+  </article>`;
+}
+const linksHTML=l=>l.map(([t,u])=>`<a href="${u}" target="_blank" rel="noopener">${t} ↗</a>`).join("");
+
+const noteOpen={};
+function refreshItem(id){
+  const row=$("it_"+id); if(!row) return;
+  const it=ITEM[id], r=S.r[id]||{}, e=ev(it);
+  row.dataset.g=e.g||"";
+  const chip=row.querySelector(".gchip");
+  if(chip){chip.dataset.g=e.g||"";chip.textContent=e.done?GN[e.g]||"":""}
+  row.querySelectorAll("[data-act]").forEach(b=>{
+    const a=b.dataset.act; let p=null;
+    if(a==="set") p=r.s===b.dataset.v;
+    else if(a==="opt") p=r.s===+b.dataset.i;
+    else if(a==="na") p=r.s==="na";
+    else if(a==="tick") p=r.s===true;
+    if(p!==null) b.setAttribute("aria-pressed",p?"true":"false");
+  });
+  const vd=row.querySelector(".verdict");
+  if(vd){
+    let h="";
+    if(e.err) h=`<div class="finding err">${esc(e.err)}</div>`;
+    else if(e.done&&RANK[e.g]&&(e.f||(e.c&&e.c[1]))&&!(it.t==="choice"&&e.g==="ok")) h=`<div class="finding" data-g="${e.g}"><strong>${GN[e.g]}</strong>${esc(e.f||"")}${costTxt(e.c)}</div>`;
+    vd.innerHTML=h; vd.hidden=!h;
+  }
+  const nw=row.querySelector(".note"), nb=row.querySelector('[data-act="note"]');
+  if(nw){
+    const show=!!(noteOpen[id]||(r.n&&r.n.trim())||(RANK[e.g]>=2));
+    nw.hidden=!show; if(nb) nb.hidden=show;
+    const o=it.t==="choice"&&typeof r.s==="number"?it.opts[r.s]:null;
+    nw.querySelector("textarea").placeholder=(o&&o.ph)||"Notes: what you saw, and where";
+  }
+}
+
+function banners(sec){
+  const warm=S.r.warm&&S.r.warm.s===1;
+  if(warm&&(sec.id==="cold"||sec.id==="hood")) return `<div class="banner"><strong>Engine was warm on arrival.</strong> ${sec.id==="hood"?"Don't open the coolant cap. Read the coolant level through the side of the reservoir.":"Starting, smoke, and noise problems may not show. Ask to come back when it's cold, or weigh these results with care."}</div>`;
+  if(sec.id==="drive"&&!S.v.trans) return `<div class="banner"><strong>Tip:</strong> set the transmission on the Vehicle step to hide checks that don't apply.</div>`;
+  return "";
+}
+
+function sectionHTML(i){
+  const sec=SECTIONS[i];
+  let h=`<section><div class="sec-head"><div class="sec-num">STEP ${String(i+1).padStart(2,"0")} OF ${SECTIONS.length}</div><h2>${sec.title}</h2><p class="blurb">${sec.blurb}</p>${banners(sec)}</div>`;
+  if(sec.custom) h+=vehicleHTML();
+  else{
+    let grp=null, open=false;
+    const vis=sec.items.filter(visible);
+    vis.forEach(it=>{
+      if(it.grp!==grp){ if(open) h+="</div>"; grp=it.grp; if(grp) h+=`<div class="glabel">${grp}</div>`; h+=`<div class="items">`; open=true; }
+      h+=itemHTML(it);
+    });
+    if(open) h+="</div>";
+    const hidden=sec.items.length-vis.length;
+    if(hidden) h+=`<p class="how" style="padding-top:12px">${hidden} check${hidden>1?"s":""} hidden because they don't apply to this car's setup.</p>`;
+  }
+  const prev=i>0?`<button class="btn" data-act="goto" data-i="${i-1}">← ${SECTIONS[i-1].short}</button>`:"";
+  const next=i<SECTIONS.length-1?`<button class="btn primary" data-act="goto" data-i="${i+1}">Next: ${SECTIONS[i+1].title} →</button>`:`<button class="btn primary" data-act="overview">See the report →</button>`;
+  let left="";
+  if(!sec.custom){const st=secStats(i);const n=st.total-st.done;left=`<div class="left" id="leftNote">${n?`${n} item${n>1?"s":""} left in this step`:"Step complete"}</div>`}
+  return h+`<div class="secnav">${left}${prev}${next}</div></section>`;
+}
+
+function vehicleHTML(){
+  const v=S.v;
+  const f=(k,l,ph,mode,cls)=>`<label class="field ${cls||""}"><span>${l}</span><input id="v_${k}" data-field="${k}" type="text" inputmode="${mode||"text"}" value="${esc(v[k])}" placeholder="${ph}" autocomplete="off"></label>`;
+  const seg=(k,val,l)=>`<button class="sbtn" data-act="vset" data-k="${k}" data-v="${val}" aria-pressed="${v[k]===val}">${l}</button>`;
+  const feats=FEATURES.map(([k,l])=>`<button class="sbtn" data-act="feat" data-f="${k}" aria-pressed="${!!(v.feat&&v.feat.includes(k))}">${l}</button>`).join("")+`<button class="sbtn" data-act="feat" data-f="none" aria-pressed="${!!(v.feat&&v.feat.length===0)}">None of these</button>`;
+  return `<div class="fields">
+    ${f("year","Year","e.g. 2017","numeric")}${f("make","Make","e.g. Toyota")}${f("model","Model","e.g. Camry")}${f("trim","Trim & options","e.g. SE")}
+    ${f("mileage","Odometer (miles)","e.g. 86,400","numeric")}${f("price","Asking price ($)","e.g. 14,500","numeric")}
+    ${f("tradein","Trade-in value ($)","e.g. 11,800","numeric")}${f("private","Private-party value ($)","e.g. 13,600","numeric")}
+    ${f("vin","VIN","17 characters","text","span vin")}${f("seller","Seller name & phone","","text","span")}
+  </div>
+  <div class="vchecks" id="vchecks">${vehicleChecks()}</div>
+  <div class="glabel">Transmission</div><div class="segs">${seg("trans","auto","Automatic")}${seg("trans","manual","Manual")}</div>
+  <div class="glabel">Drivetrain</div><div class="segs">${seg("drive","fwd","FWD")}${seg("drive","rwd","RWD")}${seg("drive","awd","AWD")}${seg("drive","4wd","4WD")}</div>
+  <div class="glabel">Features to test</div><p class="how" style="padding-top:10px">Pick what this car has. Checks for features you don't pick are hidden. Until you pick, all of them show.</p><div class="segs">${feats}</div>`;
+}
+function mileageCheck(){
+  const yr=num(S.v.year), mi=miles();
+  if(!yr||yr<1980||yr>Y+1||mi==null) return null;
+  const age=Math.max(0.5,Y-yr+0.5), exp=age*12000, ratio=mi/exp, per=Math.round(mi/age);
+  if(ratio<0.6) return {g:"minor",t:`Low miles for its age: about ${per.toLocaleString()} mi/year vs. a typical 12,000. Good if it's documented, but a car that sat can have dried seals, old tires, and a weak battery.`};
+  if(ratio>1.3) return {g:"minor",t:`High miles for its age: about ${per.toLocaleString()} mi/year vs. a typical 12,000. Expect more wear; the price should reflect it.`};
+  return {g:"ok",t:`Typical mileage: about ${per.toLocaleString()} mi/year (average is about 12,000).`};
+}
+function vinCheck(){
+  const vin=String(S.v.vin||"").trim().toUpperCase(); if(!vin) return null;
+  if(/[IOQ]/.test(vin)) return {g:"bad",t:"VINs never contain the letters I, O, or Q. Check for a typo."};
+  if(vin.length!==17) return {g:"bad",t:`VIN has ${vin.length} characters; it should have 17.`};
+  const code=vin[9];
+  const ys=num(S.v.year); let note="";
+  if(ys){const map="ABCDEFGHJKLMNPRSTVWXY123456789";const idx=map.indexOf(code);if(idx>=0){const c1=1980+idx,c2=2010+idx;if(ys!==c1&&ys!==c2)note=` The 10th character (${code}) points to ${c2<=Y+1?c2:c1}, not ${ys}. Double-check the year.`}}
+  return {g:note?"bad":"good",t:note?note.trim():"VIN format looks right."};
+}
+function vehicleChecks(){
+  const out=[];const m=mileageCheck();if(m)out.push(`<div class="hint ${m.g==="ok"?"good":""}">${m.t}</div>`);
+  const vc=vinCheck();if(vc)out.push(`<div class="hint ${vc.g}">${vc.t}</div>`);
+  const p=num(S.v.price),pp=num(S.v.private),ti=num(S.v.tradein);
+  if(p&&pp){const d=p-pp,pc=Math.round(d/pp*100);out.push(`<div class="hint ${d>0?"bad":"good"}">${d>0?`Asking is ${money(d)} (${pc}%) above private-party value.`:`Asking is ${money(-d)} at or below private-party value.`}</div>`)}
+  else if(p&&ti){out.push(`<div class="hint">Asking is ${money(p-ti)} over trade-in value. Private sales usually land between trade-in and retail.</div>`)}
+  return out.join("");
+}
+
+function render(){
+  if(S.view==="overview") main.innerHTML=overviewHTML();
+  else{
+    main.innerHTML=sectionHTML(S.sec);
+    SECTIONS[S.sec].items.forEach(it=>refreshItem(it.id));
+  }
+  renderChips();
+}
+function updateLeft(){
+  const el=$("leftNote"); if(!el) return;
+  const st=secStats(S.sec), n=st.total-st.done;
+  el.textContent=n?`${n} item${n>1?"s":""} left in this step`:"Step complete";
+}
+
+/* ------------------------------------------------------------------ */
+/* Analysis & report                                                   */
+/* ------------------------------------------------------------------ */
+function analyze(){
+  const A={find:{critical:[],major:[],minor:[]},done:0,total:0,ok:0,na:0,unchecked:[],lo:0,hi:0,tags:{},secs:[]};
+  SECTIONS.forEach((sec,si)=>{
+    if(sec.custom) return;
+    const st={sec,si,done:0,total:0,wg:""};let worst=0;
+    sec.items.filter(visible).forEach(it=>{
+      const e=ev(it); A.total++; st.total++;
+      if(e.done){A.done++;st.done++} else if(it.t!=="tick") A.unchecked.push({it,sec,si});
+      if(e.g==="ok") A.ok++; if(e.g==="na") A.na++;
+      const rk=RANK[e.g]||0; if(rk>worst){worst=rk;st.wg=e.g}
+      if(e.done&&rk>=2){
+        const rec={it,sec,si,e,note:((S.r[it.id]||{}).n||"").trim()};
+        A.find[e.g].push(rec);
+        if(e.c){A.lo+=e.c[0];A.hi+=e.c[1]}
+        if(e.tag) String(e.tag).split(" ").forEach(t=>(A.tags[t]=A.tags[t]||[]).push(rec));
+      }
+    });
+    A.secs.push(st);
+  });
+  return A;
+}
+function insights(A){
+  const L=[], T=t=>A.tags[t]||[], names=a=>a.map(r=>r.it.label.toLowerCase()).join("; ");
+  const hg=T("hg");
+  if(hg.length) L.push({g:"critical",t:"Head gasket warning",d:`${hg.length>1?"Several signs":"One sign"} of coolant mixing with oil or exhaust (${names(hg)}). A head gasket repair usually costs $1,500–3,000 or more. ${hg.length>1?"Walk away unless it's priced as a project car.":"Before buying, ask a shop for a combustion leak (block) test, about $50–150."}`});
+  const fl=T("flood");
+  if(fl.length) L.push({g:fl.some(r=>r.e.g==="critical")||fl.length>1?"critical":"major",t:"Possible water or flood damage",d:`Found: ${names(fl)}. Flood cars develop electrical and corrosion problems for years. Find the water source, or walk away if it's flood damage.`});
+  const cr=T("crash");
+  if(cr.length) L.push({g:cr.some(r=>r.e.g==="critical")?"critical":"major",t:"Signs of past collision repair",d:`Found: ${names(cr)}. A good repair isn't a deal-breaker, but have a body shop check the frame and alignment, and compare with the history report. The price should reflect it.`});
+  const od=T("odo"), wr=T("wear");
+  if(od.length) L.push({g:"critical",t:"Mileage can't be trusted",d:"The odometer doesn't match the records. Walk away; rolled-back mileage is fraud and hides real wear."});
+  else if(wr.length&&(miles()||0)<80000) L.push({g:"major",t:"Possible odometer rollback",d:`Interior wear looks heavier than ${miles()?miles().toLocaleString()+" miles":"the odometer reading"} would cause. Check the history report's mileage entries and the service records.`});
+  if(T("codes").length) L.push({g:"major",t:"Codes may have been cleared",d:"Not-ready monitors or new codes after the drive suggest the seller cleared a fault recently. Ask directly, or rescan after the car has been driven 50–100 miles."});
+  if(T("warm").length) L.push({g:"minor",t:"Engine was warm before you started it",d:"Cold-start problems (hard starting, smoke, rattles) can hide on a warm engine. If you're serious, ask to see it start cold."});
+  const tr=T("trans");
+  if(tr.length) L.push({g:tr.some(r=>r.e.g==="critical")?"critical":"major",t:"Transmission concerns",d:`Found: ${names(tr)}. Transmission repairs are among the most expensive ($2,500–4,500 for a rebuild). Have it diagnosed before you buy.`});
+  const sl=T("seller");
+  if(sl.length>=2) L.push({g:"major",t:"Several seller red flags",d:`Found: ${names(sl)}. Insist on an independent inspection and a clean title in their name before any money changes hands.`});
+  const ti=T("tires");
+  if(ti.length) L.push({g:"minor",t:"Budget for tires",d:isAWD()?"On AWD/4WD, replace all four at once so the tread depths match. A set runs about $600–1,200.":"Plan on new tires soon: about $600–1,200 a set."});
+  return L;
+}
+function verdict(A){
+  const c=A.find.critical.length,m=A.find.major.length,mi=A.find.minor.length,p=num(S.v.price);
+  if(!A.done) return {level:"",title:"Nothing checked yet",sub:"Work through the steps and the report will fill in as you go."};
+  if(c) return {level:"critical",title:"Walk away",sub:`${c} deal-breaker${c>1?"s":""} found. Unless it's priced as a project car, keep looking.`};
+  if(m>=3||(p&&A.hi>p*0.2)) return {level:"major",title:"Only with a big discount",sub:"Several significant problems. Get an independent inspection, and take the repair costs off the price, or walk away."};
+  if(m) return {level:"major",title:"Negotiate, then get a pro inspection",sub:`${m} significant issue${m>1?"s":""} to have checked. Use the estimates below to negotiate.`};
+  if(mi) return {level:"ok",title:"Good candidate",sub:"Only minor issues. Use them to negotiate, and still consider an independent inspection ($100–250)."};
+  return {level:"ok",title:"Looks clean",sub:"Nothing wrong found so far. An independent inspection ($100–250) is still worth it before you pay."};
+}
+function gaugeSVG(score){
+  const s=score==null?0:score; let ticks="";
+  for(let k=0;k<=10;k++){const a=Math.PI-k*Math.PI/10,r1=k%5===0?30:33,r2=37;ticks+=`<line x1="${(60+r1*Math.cos(a)).toFixed(1)}" y1="${(64-r1*Math.sin(a)).toFixed(1)}" x2="${(60+r2*Math.cos(a)).toFixed(1)}" y2="${(64-r2*Math.sin(a)).toFixed(1)}" stroke="var(--muted)" stroke-width="${k%5===0?1.6:1}"/>`}
+  return `<svg class="gauge" viewBox="0 0 120 78" role="img" aria-label="Condition score ${score==null?"not available":score+" out of 100"}">
+   <path d="M12 64 A48 48 0 0 1 108 64" fill="none" stroke="var(--sunk)" stroke-width="9" stroke-linecap="round"/>
+   ${s>0?`<path d="M12 64 A48 48 0 0 1 108 64" fill="none" stroke="var(--lv)" stroke-width="9" stroke-linecap="round" pathLength="100" stroke-dasharray="${s} 100"/>`:""}
+   ${ticks}
+   <text x="60" y="62" text-anchor="middle" class="g-num">${score==null?"–":score}</text>
+   <text x="60" y="76" text-anchor="middle" class="g-lbl">CONDITION / 100</text></svg>`;
+}
+function priceBlock(A){
+  const p=num(S.v.price),ti=num(S.v.tradein),pp=num(S.v.private);
+  const cells=[];
+  cells.push(`<div class="mcell"><span>Asking</span><b>${p?money(p):"—"}</b></div>`);
+  cells.push(`<div class="mcell"><span>Trade-in value</span><b>${ti?money(ti):"—"}</b></div>`);
+  cells.push(`<div class="mcell"><span>Private-party value</span><b>${pp?money(pp):"—"}</b></div>`);
+  cells.push(`<div class="mcell"><span>Estimated repairs</span><b>${A.hi?`${money(A.lo)}–${money(A.hi)}`:"$0"}</b></div>`);
+  const notes=[];
+  let offer="";
+  if(p){
+    const base=pp?Math.min(p,pp):p;
+    let hiO=round50(base-A.lo), loO=round50(base-A.hi);
+    if(pp&&p>pp) notes.push(`The asking price is ${money(p-pp)} above private-party value, so the offer starts from the market value instead.`);
+    if(ti&&loO<ti){notes.push(`The low end is under trade-in value (${money(ti)}). Most private sellers won't go below what a dealer would give them, so expect pushback.`)}
+    offer=`<div class="mcell hl"><span>Suggested offer range</span><b>${loO===hiO?money(hiO):`${money(loO)}–${money(hiO)}`}</b></div>`;
+    cells.push(offer);
+  } else notes.push("Add the asking price on the Vehicle step to get a suggested offer.");
+  if(A.hi) notes.push("Repair figures are rough U.S. shop estimates for planning and negotiating. Get real quotes for big items.");
+  const m=mileageCheck(); if(m) notes.unshift(m.t);
+  return `<div class="money">${cells.join("")}</div>${notes.map(n=>`<p class="mnote">${n}</p>`).join("")}`;
+}
+function overviewHTML(){
+  const A=analyze(), V=verdict(A), L=insights(A);
+  const c=A.find.critical.length,m=A.find.major.length,mi=A.find.minor.length;
+  const score=A.done?Math.max(0,Math.min(100,100-3*mi-10*m-30*c)):null;
+  const meta=[miles()!=null?miles().toLocaleString()+" mi":"",S.v.vin?"VIN "+String(S.v.vin).toUpperCase():"",S.v.trans?(S.v.trans==="auto"?"Automatic":"Manual"):"",S.v.drive?S.v.drive.toUpperCase():"",S.v.seller].filter(Boolean).map(esc).join(" · ");
+  const pct=A.total?Math.round(A.done/A.total*100):0;
+  let h=`<section class="ov">
+   <div><div class="eyebrow">Inspection report · ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div><h2>${esc(carName())}</h2>${meta?`<p class="ov-meta">${meta}</p>`:""}</div>
+   <div class="vband" data-level="${V.level}">${gaugeSVG(score)}<div class="vtext"><div class="eyebrow">Verdict</div><div class="vtitle">${V.title}</div><p>${V.sub}</p>${A.done&&pct<70?`<p class="mnote">Only ${pct}% of the checklist is done, so this verdict could change.</p>`:""}</div></div>
+   <div class="stats">
+    <div class="stat"><b>${A.done}/${A.total}</b><span>Checked</span></div>
+    <div class="stat" data-g="ok"><b>${A.ok}</b><span>Good</span></div>
+    <div class="stat" data-g="minor"><b>${mi}</b><span>Minor</span></div>
+    <div class="stat" data-g="major"><b>${m}</b><span>Major</span></div>
+    <div class="stat" data-g="critical"><b>${c}</b><span>Deal-breakers</span></div>
+    <div class="stat"><b>${A.na}</b><span>Skipped</span></div>
+   </div>
+   <h3>The numbers</h3>${priceBlock(A)}`;
+  h+=`<h3>What stands out</h3>`;
+  h+=L.length?`<ul class="ins">${L.map(x=>`<li data-g="${x.g}"><b>${x.t}</b><span>${esc(x.d)}</span></li>`).join("")}</ul>`:`<p class="empty">${A.done?"No patterns of concern across your answers.":"Patterns across your answers (head gasket, flood, collision, cleared codes) will show here."}</p>`;
+  h+=`<h3>Findings</h3>`;
+  const grp=(g,title)=>{const a=A.find[g];if(!a.length)return "";return `<div class="fgroup"><h4><span class="d" data-g="${g}"></span>${title} (${a.length})</h4><ul class="flist">${a.map(r=>`<li><span class="fl">${r.it.label}</span><span class="cost">${r.e.c&&r.e.c[1]?`${money(r.e.c[0])}–${money(r.e.c[1])}`:""}</span><span class="fs">${r.sec.title}</span><span class="ff">${esc(r.e.f||r.e.opt||"")}</span>${r.note?`<span class="fn">“${esc(r.note)}”</span>`:""}</li>`).join("")}</ul></div>`};
+  const fg=grp("critical","Deal-breakers")+grp("major","Major")+grp("minor","Minor");
+  h+=fg||`<p class="empty">No problems recorded${A.done?"":" yet"}.</p>`;
+  h+=`<h3>By step</h3><div class="tbl-wrap"><table><thead><tr><th>Step</th><th>Done</th><th>Worst</th><th></th></tr></thead><tbody>${A.secs.map(s=>`<tr><td>${s.sec.title}</td><td class="num">${s.done}/${s.total}</td><td>${s.wg?`<span class="gchip" data-g="${s.wg}">${GN[s.wg]}</span>`:"—"}</td><td><button class="linkbtn" data-act="goto" data-i="${s.si}">Open</button></td></tr>`).join("")}</tbody></table></div>`;
+  const qs=SECTIONS[SEC_OF.owned].items.filter(it=>it.t==="text"||it.id==="owned");
+  const ans=qs.map(it=>{const r=S.r[it.id]||{};const val=it.id==="owned"?(r.v?`${esc(r.v)} months`:""):esc((r.v||"").trim());return val?`<div><dt>${it.label}</dt><dd>${val}</dd></div>`:""}).join("");
+  h+=`<h3>Seller's answers</h3>${ans?`<dl class="answers">${ans}</dl>`:`<p class="empty">No answers recorded.</p>`}`;
+  if(A.unchecked.length){
+    const by={};A.unchecked.forEach(u=>(by[u.si]=by[u.si]||[]).push(u));
+    h+=`<details><summary>Not checked yet (${A.unchecked.length})</summary>${Object.keys(by).map(si=>`<p style="margin:4px 0"><b>${SECTIONS[si].title}</b> · <button class="linkbtn" data-act="goto" data-i="${si}">Open</button></p><ul>${by[si].map(u=>`<li>${u.it.label}</li>`).join("")}</ul>`).join("")}</details>`;
+  }
+  h+=`<div class="actions"><button class="btn primary" data-act="copy">Copy report as text</button><button class="btn" data-act="goto" data-i="${S.sec}">Back to checklist</button><button class="btn danger" data-act="reset">Start a new inspection</button><div class="toast" id="toast" aria-live="polite"></div></div>
+   <textarea id="copybox" readonly hidden></textarea></section>`;
+  return h;
+}
+function reportText(){
+  const A=analyze(),V=verdict(A),L=insights(A);
+  const c=A.find.critical.length,m=A.find.major.length,mi=A.find.minor.length;
+  const score=A.done?Math.max(0,100-3*mi-10*m-30*c):"–";
+  const p=num(S.v.price),ti=num(S.v.tradein),pp=num(S.v.private);
+  const lines=[];
+  lines.push(`USED CAR INSPECTION: ${carName()}`);
+  lines.push([new Date().toLocaleDateString("en-US"),miles()!=null?miles().toLocaleString()+" mi":"",S.v.vin?"VIN "+String(S.v.vin).toUpperCase():""].filter(Boolean).join(" · "));
+  lines.push(`Verdict: ${V.title} (condition ${score}/100). ${V.sub}`);
+  lines.push(`Checked ${A.done}/${A.total} · Good ${A.ok} · Minor ${mi} · Major ${m} · Deal-breakers ${c}`);
+  lines.push(`Asking ${p?money(p):"—"} · Trade-in ${ti?money(ti):"—"} · Private-party ${pp?money(pp):"—"} · Est. repairs ${money(A.lo)}–${money(A.hi)}`);
+  if(p){const base=pp?Math.min(p,pp):p;lines.push(`Suggested offer: ${money(round50(base-A.hi))}–${money(round50(base-A.lo))}`)}
+  if(L.length){lines.push("","WHAT STANDS OUT");L.forEach(x=>lines.push(`- ${x.t}: ${x.d}`))}
+  [["critical","DEAL-BREAKERS"],["major","MAJOR"],["minor","MINOR"]].forEach(([g,t])=>{const a=A.find[g];if(!a.length)return;lines.push("",t);a.forEach(r=>lines.push(`- [${r.sec.title}] ${r.it.label}: ${r.e.f||r.e.opt||""}${r.e.c&&r.e.c[1]?` (${money(r.e.c[0])}–${money(r.e.c[1])})`:""}${r.note?` Note: ${r.note}`:""}`))});
+  const qs=SECTIONS[SEC_OF.owned].items.filter(it=>it.t==="text"||it.id==="owned");
+  const ans=qs.map(it=>{const r=S.r[it.id]||{};const v=it.id==="owned"?(r.v?r.v+" months":""):(r.v||"").trim();return v?`- ${it.label} ${v}`:""}).filter(Boolean);
+  if(ans.length){lines.push("","SELLER'S ANSWERS");lines.push(...ans)}
+  if(A.unchecked.length) lines.push("",`Not checked: ${A.unchecked.length} items`);
+  return lines.join("\n");
+}
+
+/* ------------------------------------------------------------------ */
+/* Events                                                              */
+/* ------------------------------------------------------------------ */
+const R=id=>(S.r[id]=S.r[id]||{});
+let resetTimer;
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-act]"); if(!b) return;
+  const act=b.dataset.act, row=b.closest("[data-id]"), id=row&&row.dataset.id;
+  switch(act){
+    case "set":{const r=R(id);r.s=r.s===b.dataset.v?undefined:b.dataset.v;break}
+    case "opt":{const r=R(id),i=+b.dataset.i;r.s=r.s===i?undefined:i;break}
+    case "na":{const r=R(id);r.s=r.s==="na"?undefined:"na";break}
+    case "tick":{const r=R(id);r.s=!r.s;break}
+    case "note":{noteOpen[id]=true;refreshItem(id);const ta=$("n_"+id);if(ta)ta.focus();return}
+    case "goto":{S.sec=+b.dataset.i;S.view="list";save();render();window.scrollTo(0,0);return}
+    case "overview":{S.view="overview";save();render();window.scrollTo(0,0);return}
+    case "vset":{const k=b.dataset.k;S.v[k]=S.v[k]===b.dataset.v?"":b.dataset.v;b.parentNode.querySelectorAll("[data-act=vset]").forEach(x=>x.setAttribute("aria-pressed",S.v[k]===x.dataset.v));save();updateProgress();return}
+    case "feat":{
+      const f=b.dataset.f;
+      if(f==="none") S.v.feat=(S.v.feat&&S.v.feat.length===0)?null:[];
+      else{const a=S.v.feat?S.v.feat.slice():[];const i=a.indexOf(f);if(i>=0)a.splice(i,1);else a.push(f);S.v.feat=a}
+      b.parentNode.querySelectorAll("[data-act=feat]").forEach(x=>x.setAttribute("aria-pressed",x.dataset.f==="none"?!!(S.v.feat&&S.v.feat.length===0):!!(S.v.feat&&S.v.feat.includes(x.dataset.f))));
+      save();updateProgress();return}
+    case "copy":{
+      const txt=reportText(), box=$("copybox"), toast=$("toast");
+      const fallback=()=>{box.value=txt;box.hidden=false;box.focus();box.select();toast.textContent="Copying isn't available here. The report is selected below; copy it from the box."};
+      try{navigator.clipboard.writeText(txt).then(()=>{toast.textContent="Report copied. Paste it into a text or email."},fallback)}catch(err){fallback()}
+      return}
+    case "reset":{
+      if(b.dataset.arm==="1"){clearTimeout(resetTimer);S=fresh();for(const k in noteOpen)delete noteOpen[k];save();render();window.scrollTo(0,0);return}
+      b.dataset.arm="1";b.textContent="Tap again to erase this inspection";
+      resetTimer=setTimeout(()=>{b.dataset.arm="";b.textContent="Start a new inspection"},4000);return}
+  }
+  if(id){refreshItem(id);updateProgress();updateLeft();save()}
+});
+document.addEventListener("input",e=>{
+  const t=e.target;
+  if(t.dataset.field){S.v[t.dataset.field]=t.value;const vc=$("vchecks");if(vc)vc.innerHTML=vehicleChecks();updateProgress();save();return}
+  if(t.dataset.num){const r=R(t.dataset.num);r.v=t.value;if(r.s==="na")delete r.s;refreshItem(t.dataset.num);updateProgress();updateLeft();save();return}
+  if(t.dataset.text){R(t.dataset.text).v=t.value;refreshItem(t.dataset.text);updateProgress();updateLeft();save();return}
+  if(t.dataset.note){R(t.dataset.note).n=t.value;save();return}
+});
+
+/* Keep the screen on during the inspection, where allowed */
+let wl=null;
+async function wake(){try{if("wakeLock" in navigator&&!wl&&document.visibilityState==="visible"){wl=await navigator.wakeLock.request("screen");wl.addEventListener("release",()=>{wl=null})}}catch(err){}}
+document.addEventListener("pointerdown",wake);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")wake()});
+
+render();
+})();
+</script>
+</body>
+</html>
